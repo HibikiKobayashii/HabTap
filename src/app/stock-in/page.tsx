@@ -51,17 +51,47 @@ export default function StockInPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ==========================================
+  // ★ ここが監視カメラ（ログ可視化）を仕込んだ魔法のステッキです
+  // ==========================================
   const handleFetchAmazon = async () => {
-    if (!formData.amazonUrl) return alert("AmazonのURLを入力してください。");
+    if (!formData.amazonUrl) {
+      console.warn('[HabiTap 監視] URLが未入力のまま取得ボタンが押されました。');
+      return alert("AmazonのURLを入力してください。");
+    }
+    
     setFetchingAmazon(true);
+    console.info(`[HabiTap 監視] 🚀 Amazonからの食材調達を開始します...`);
+    console.info(`[HabiTap 監視] 🎯 対象URL: ${formData.amazonUrl}`);
+
     try {
+      // 厨房（actions.ts）へURLを送り、結果を待ちます
       const data = await fetchAmazonData(formData.amazonUrl);
-      if (data.error) alert(data.error);
-      else setFormData(prev => ({ ...prev, name: data.name || prev.name, imageUrl: data.imageUrl || prev.imageUrl }));
+      
+      // 厨房から返ってきた「生の結果」をすべてコンソールに並べます
+      console.log('[HabiTap 監視] 📦 厨房（サーバー）からの返答データ:', data);
+
+      if (data.error) {
+        console.error('[HabiTap 監視] ❌ 厨房からのエラー報告:', data.error);
+        alert(data.error);
+      } else {
+        console.info(`[HabiTap 監視] ✅ 調達成功！`);
+        console.info(`  - 商品名: ${data.name}`);
+        console.info(`  - 画像URL: ${data.imageUrl ? '取得済み' : '見つかりません'}`);
+        
+        setFormData(prev => ({ 
+          ...prev, 
+          name: data.name || prev.name, 
+          imageUrl: data.imageUrl || prev.imageUrl 
+        }));
+      }
     } catch (error) {
+      // ネットワーク切断など、予測不能な致命的エラーを捕獲します
+      console.error('[HabiTap 監視] 💥 通信またはシステムレベルの致命的なエラー:', error);
       alert("取得に失敗しました。手動で入力をお願いします。");
     } finally {
       setFetchingAmazon(false);
+      console.info('[HabiTap 監視] 🏁 調達プロセスを終了しました。');
     }
   };
 
@@ -71,9 +101,8 @@ export default function StockInPage() {
 
     setLoading(true);
     try {
-      // ★ 修正：userId は actions.ts 内で getServerSession から取得するため、
-      // クライアント側（ここ）からは渡さないようにしました。
       await createItem({
+        userId: (session.user as any).id, // ★ 修正: 前回のコードで欠落していた userId を復元しました
         name: formData.name, 
         stock: parseInt(formData.stock, 10), 
         maxStock: parseInt(formData.maxStock, 10),
