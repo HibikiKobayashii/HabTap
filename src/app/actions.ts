@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import * as cheerio from 'cheerio';
 import webpush from 'web-push';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "./api/auth/[...nextauth]/route";
 
 // ==========================================
 // ★ 副料理長への連絡網（Web Push設定）
@@ -106,6 +108,13 @@ export async function consumeItem(itemId: string) {
   }
 }
 
+export async function getUserPlanAndItemCount(userId: string) {
+  if (!userId) return null;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const count = await prisma.item.count({ where: { userId } });
+  return { plan: user?.plan || 'free', itemCount: count };
+}
+
 /**
  * ==========================================
  * ★ 新規登録・更新
@@ -115,31 +124,8 @@ export async function createItem(data: {
   name: string; stock: number; maxStock: number; daysLeft: number; 
   imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
 }) {
-  // ※サーバーサイドで安全にセッションからユーザー情報を引き出すなど、セキュリティ上堅牢な設計は維持
-  // (今回は現状のDB構造に合わせて簡略化)
-}
-
-// -------------------------------------------------------------
-// ★ Vercelビルドエラー回避用: actions.ts内でSessionに依存せず
-// クライアント側へcreate/update処理はAPI経由か引数調整で委譲している想定のため、
-// ここでは既存の `createItem` 等の引数を維持します。
-// （※先ほどの `page.tsx` の修正と辻褄が合うように調整済み）
-// -------------------------------------------------------------
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "./api/auth/[...nextauth]/route";
-
-export async function getUserPlanAndItemCount(userId: string) {
-  if (!userId) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  const count = await prisma.item.count({ where: { userId } });
-  return { plan: user?.plan || 'free', itemCount: count };
-}
-
-export async function createItem(data: {
-  name: string; stock: number; maxStock: number; daysLeft: number; 
-  imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
-}) {
   try {
+    // クライアントから渡さず、ここで確実に身元を確認します
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     if (!userId) return { error: '認証が必要です' };
@@ -189,6 +175,11 @@ export async function updateItem(itemId: string, data: {
   }
 }
 
+/**
+ * ==========================================
+ * ★ 廃棄（デリート）
+ * ==========================================
+ */
 export async function deleteItem(itemId: string) {
   if (!itemId) return { error: "IDが不明です" };
   try {
@@ -247,20 +238,18 @@ export async function getAdminChartData(timeframe: 'day' | 'week' | 'month' = 'm
  * ==========================================
  */
 export async function fetchAmazonData(url: string) {
-  // 1. amazon.co.jp, amzn.to に加え、スマホアプリ用の amzn.asia を名簿に追加
   if (!url.match(/amazon\.co\.jp|amzn\.to|amzn\.asia/)) {
     return { error: 'AmazonのURL（amazon.co.jp, amzn.to, amzn.asia）をご提示ください' };
   }
 
   try {
-    // 2. Vercelのサーバーを「Googleの検索ロボット」に変装させて入店します
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
       },
-      redirect: 'follow', // 短縮URLのリダイレクトを自動で追いかけます
+      redirect: 'follow', 
       next: { revalidate: 3600 } 
     });
 
@@ -269,24 +258,19 @@ export async function fetchAmazonData(url: string) {
     const html = await res.text();
     const $ = cheerio.load(html);
     
-    // 3. 商品名の抽出
     let title = $('#productTitle').text().trim();
     
-    // Googlebotの変装でも特殊な画面（Captcha等）が出た場合の保険
     if (!title) {
       const rawTitle = $('title').text().trim();
       title = rawTitle.replace(/^Amazon\.co\.jp\s*[:：\|]\s*/i, '').trim();
     }
 
-    // 4. 画像URLの抽出
     let imageUrl = $('#landingImage').attr('src');
     if (!imageUrl) imageUrl = $('#imgBlkFront').attr('src');
     if (!imageUrl) {
-      // メイン画像が取れない場合は、OGP画像（SNS共有用のサムネイル）を探します
       imageUrl = $('meta[property="og:image"]').attr('content');
     }
 
-    // 抽出したデータが空っぽ、または防壁の画面だった場合は美しいエラーを返す
     if (!title || title === 'Amazon.co.jp' || title.includes('ボット')) {
        return { error: 'Amazonの防壁に阻まれました。お手数ですが手動でご入力ください。' };
     }
