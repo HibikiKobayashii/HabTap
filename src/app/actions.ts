@@ -3,10 +3,10 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import * as cheerio from 'cheerio';
 import webpush from 'web-push';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]/route";
+// ★ 削除: import * as cheerio from 'cheerio'; （スクレイピング用の刃を破棄）
 
 // ==========================================
 // ★ 副料理長への連絡網（Web Push設定）
@@ -125,7 +125,6 @@ export async function createItem(data: {
   imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
 }) {
   try {
-    // クライアントからuserIdを渡さず、ここで確実に身元を確認します（安全性の極み）
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     if (!userId) return { error: '認証が必要です' };
@@ -193,6 +192,10 @@ export async function deleteItem(itemId: string) {
   }
 }
 
+// ---------------------------------------------------------
+// ★ 削除: fetchAmazonData() の全ロジックを破棄しました
+// ---------------------------------------------------------
+
 export async function getAdminStats() {
   const totalUsers = await prisma.user.count();
   const proUsers = await prisma.user.count({ where: { plan: 'pro' } });
@@ -230,100 +233,6 @@ export async function getAdminChartData(timeframe: 'day' | 'week' | 'month' = 'm
     chartData.push({ name, ユーザー総数: totalUsers, アクティブユーザー: activeUsers });
   }
   return chartData;
-}
-
-/**
- * ==========================================
- * ★ Amazonデータの調達（二段構えの究極バイパス）
- * ==========================================
- */
-export async function fetchAmazonData(url: string) {
-  // 1. スマホアプリの短縮URLにも完全対応
-  if (!url.match(/amazon\.co\.jp|amzn\.to|amzn\.asia/i)) {
-    return { error: 'AmazonのURL（amazon.co.jp, amzn.to, amzn.asia）をご提示ください' };
-  }
-
-  try {
-    let finalUrl = url;
-
-    // 2. 短縮URLを展開して、最終的な行き先（本当のURL）を割り出します
-    try {
-      const initialRes = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-        redirect: 'follow'
-      });
-      finalUrl = initialRes.url;
-    } catch (e) {
-      console.warn('[厨房] URLの展開に失敗しましたが、処理を続行します', e);
-    }
-    
-    // 3. URLの中から、商品のマイナンバーである「ASIN（10桁の英数字）」を抽出します
-    const asinMatch = finalUrl.match(/(?:dp|product|asin)[/]([A-Z0-9]{10})/i) || finalUrl.match(/\/([A-Z0-9]{10})(?:[/?]|$)/i);
-    const asin = asinMatch ? asinMatch[1] : null;
-
-    // ==========================================
-    // 突破口 1：Yahoo!ショッピングルート（再現率：激高）
-    // ==========================================
-    if (asin) {
-      console.log(`[厨房] ASIN(${asin})を検知。Yahoo!ルートから調達します...`);
-      try {
-        const yahooUrl = `https://shopping.yahoo.co.jp/search?p=${asin}`;
-        const yahooRes = await fetch(yahooUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
-        });
-        
-        if (yahooRes.ok) {
-          const yahooHtml = await yahooRes.text();
-          const $ = cheerio.load(yahooHtml);
-          
-          let name = '';
-          let imageUrl = '';
-
-          $('img').each((i, el) => {
-            const src = $(el).attr('src') || '';
-            const alt = $(el).attr('alt') || '';
-            if (src.includes('item-shopping.c.yimg.jp') && alt.length > 5) {
-              name = alt;
-              imageUrl = src;
-              return false; // 見つかったらループ終了
-            }
-          });
-
-          if (name && imageUrl) {
-             console.log(`[厨房] Yahoo!ルートでの調達に見事成功しました。`);
-             return { name, imageUrl };
-          }
-        }
-      } catch (yahooErr) {
-        console.warn(`[厨房] Yahoo!ルートで予期せぬエラー:`, yahooErr);
-      }
-    }
-
-    // ==========================================
-    // 突破口 2：運び屋（AllOrigins）ルート
-    // ==========================================
-    console.log(`[厨房] Yahoo!ルート失敗。運び屋（AllOrigins）を手配しAmazon本家へ再突撃します...`);
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finalUrl)}`;
-    const proxyRes = await fetch(proxyUrl);
-    const proxyData = await proxyRes.json();
-    
-    if (proxyData.contents) {
-      const $ = cheerio.load(proxyData.contents);
-      let title = $('#productTitle').text().trim() || $('title').text().replace(/^Amazon\.co\.jp\s*[:：\|]\s*/i, '').trim();
-      let img = $('#landingImage').attr('src') || $('#imgBlkFront').attr('src') || $('meta[property="og:image"]').attr('content');
-      
-      if (title && !title.includes('ボット') && title !== 'Amazon.co.jp') {
-        console.log(`[厨房] 運び屋ルートでの調達に成功しました。`);
-        return { name: title, imageUrl: img || '' };
-      }
-    }
-
-    throw new Error('All bypass methods failed');
-
-  } catch (error) {
-    console.error('Amazonスクレイピングエラー:', error);
-    return { error: 'Amazonの強固な防壁に阻まれました。お手数ですが手動でご入力いただけますでしょうか。' };
-  }
 }
 
 export async function savePushSubscription(userId: string, subscription: string) {

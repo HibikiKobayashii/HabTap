@@ -2,7 +2,7 @@
 'use client';
 
 import { useSession, signOut } from 'next-auth/react';
-import { useState, useEffect } from 'react'; // ★ useEffectを追加
+import { useState, useEffect } from 'react';
 import { 
   Box, Typography, Paper, Avatar, Button, Chip, Divider, 
   List, ListItem, ListItemIcon, ListItemText, Switch, CircularProgress, TextField, Fade,
@@ -18,7 +18,6 @@ import SendIcon from '@mui/icons-material/Send';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import PushSetting from '@/components/PushSetting';
-// ★ actionsから新しい関数を呼び寄せます
 import { submitFeedback, getBiometricStatus, removeBiometricStatus } from '@/app/actions';
 import { startRegistration } from '@simplewebauthn/browser';
 
@@ -27,7 +26,7 @@ export default function AccountPage() {
   const router = useRouter();
 
   const [biometric, setBiometric] = useState(false);
-  const [biometricLoading, setBiometricLoading] = useState(true); // ★ 初期値は読込中に
+  const [biometricLoading, setBiometricLoading] = useState(true);
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -46,16 +45,12 @@ export default function AccountPage() {
     setSnackbar({ open: true, message: msg, severity: sev });
   };
 
-  // =========================================
-  // ★ ページ入場時、金庫（DB）の登録状況を確認する極秘工程
-  // =========================================
   useEffect(() => {
     const syncStatus = async () => {
       if (session?.user) {
         const isRegistered = await getBiometricStatus((session.user as any).id);
         setBiometric(isRegistered);
         
-        // ログイン画面のボタン表示用LocalStorageも、ここで最新に同期させます
         if (isRegistered) {
           localStorage.setItem('biometric_email', session.user.email!);
         } else {
@@ -94,7 +89,6 @@ export default function AccountPage() {
     setBiometricLoading(true);
 
     if (isChecked) {
-      // --- 登録（ONにする）工程 ---
       try {
         const optRes = await fetch('/api/webauthn/register/options', {
           method: 'POST',
@@ -143,7 +137,6 @@ export default function AccountPage() {
         setBiometricLoading(false);
       }
     } else {
-      // --- 解除（OFFにする）工程 ---
       try {
         const result = await removeBiometricStatus((session.user as any).id);
         if (result.success) {
@@ -156,7 +149,7 @@ export default function AccountPage() {
       } catch (error: any) {
         console.error(error);
         showMessage('解除に失敗しました。もう一度お試しください。', 'error');
-        setBiometric(true); // 失敗したのでスイッチをONに戻す
+        setBiometric(true);
       } finally {
         setBiometricLoading(false);
       }
@@ -182,6 +175,15 @@ export default function AccountPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const linkButtonSx = { 
+    justifyContent: 'space-between', 
+    py: 2, 
+    color: 'text.primary', 
+    borderBottom: '1px solid #e2e8f0',
+    borderRadius: 0,
+    '&:hover': { bgcolor: '#f8fafc' }
   };
 
   return (
@@ -214,7 +216,6 @@ export default function AccountPage() {
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>APP SETTINGS</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
           <PushSetting />
-          {/* 生体認証設定 */}
           <Paper elevation={0} sx={{ borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', bgcolor: '#ffffff' }}>
             <List disablePadding>
               <ListItem sx={{ p: { xs: 2.5, md: 3 } }}>
@@ -248,11 +249,45 @@ export default function AccountPage() {
           </Box>
         </Paper>
 
-        <Button fullWidth onClick={() => router.push('/about')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={{ justifyContent: 'space-between', py: 2, mb: 3, color: 'text.primary', borderBottom: '1px solid #e2e8f0' }}>このアプリについて</Button>
-        <Button fullWidth onClick={() => signOut({ callbackUrl: '/' })} startIcon={<LogoutIcon />} sx={{ mt: 2, py: 1.5, color: 'error.main', fontWeight: 'bold', backgroundColor: '#fef2f2', borderRadius: '24px' }}>ログアウト</Button>
+        {/* --- リーガル・インフォメーション --- */}
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>LEGAL & INFO</Typography>
+        <Box sx={{ mb: 4 }}>
+          <Button 
+            fullWidth 
+            onClick={() => router.push('/about')} 
+            endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} 
+            sx={linkButtonSx}
+          >
+            About HabiTap
+          </Button>
+          <Button 
+            fullWidth 
+            onClick={() => router.push('/terms')} 
+            endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} 
+            sx={linkButtonSx}
+          >
+            利用規約
+          </Button>
+          <Button 
+            fullWidth 
+            onClick={() => router.push('/privacy')} 
+            endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} 
+            sx={{ ...linkButtonSx, borderBottom: 'none' }}
+          >
+            プライバシーポリシー
+          </Button>
+        </Box>
+
+        <Button 
+          fullWidth 
+          onClick={() => signOut({ callbackUrl: '/' })} 
+          startIcon={<LogoutIcon />} 
+          sx={{ py: 1.5, color: 'error.main', fontWeight: 'bold', backgroundColor: '#fef2f2', borderRadius: '24px', '&:hover': { backgroundColor: '#fee2e2' } }}
+        >
+          ログアウト
+        </Button>
       </Box>
 
-      {/* 洗練された通知プレート */}
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '12px', fontWeight: 'bold' }}>
           {snackbar.message}

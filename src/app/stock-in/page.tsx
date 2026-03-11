@@ -5,22 +5,22 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { 
-  Box, Typography, TextField, Button, Paper, CircularProgress, Tooltip, Avatar
+  Box, Typography, TextField, Button, Paper, CircularProgress, Tooltip, Avatar, Divider
 } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import ImageIcon from '@mui/icons-material/Image';
+import LinkIcon from '@mui/icons-material/Link';
 
-import { createItem, fetchAmazonData, getUserPlanAndItemCount } from '../actions';
+// ★ fetchAmazonData（魔法のステッキ）は完全に削除しました
+import { createItem, getUserPlanAndItemCount } from '../actions';
 
 export default function StockInPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   
   const [loading, setLoading] = useState(false);
-  const [fetchingAmazon, setFetchingAmazon] = useState(false);
-
   const [isLimitReached, setIsLimitReached] = useState(false);
   const [checkingLimit, setCheckingLimit] = useState(true);
 
@@ -51,39 +51,6 @@ export default function StockInPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFetchAmazon = async () => {
-    if (!formData.amazonUrl) {
-      console.warn('[HabiTap 監視] URLが未入力のまま取得ボタンが押されました。');
-      return alert("AmazonのURLを入力してください。");
-    }
-    
-    setFetchingAmazon(true);
-    console.info(`[HabiTap 監視] 🚀 Amazonからの食材調達を開始します...`);
-    console.info(`[HabiTap 監視] 🎯 対象URL: ${formData.amazonUrl}`);
-
-    try {
-      const data = await fetchAmazonData(formData.amazonUrl);
-      console.log('[HabiTap 監視] 📦 厨房（サーバー）からの返答データ:', data);
-
-      if (data.error) {
-        console.error('[HabiTap 監視] ❌ 厨房からのエラー報告:', data.error);
-        alert(data.error);
-      } else {
-        console.info(`[HabiTap 監視] ✅ 調達成功！`);
-        setFormData(prev => ({ 
-          ...prev, 
-          name: data.name || prev.name, 
-          imageUrl: data.imageUrl || prev.imageUrl 
-        }));
-      }
-    } catch (error) {
-      console.error('[HabiTap 監視] 💥 致命的なエラー:', error);
-      alert("取得に失敗しました。手動で入力をお願いします。");
-    } finally {
-      setFetchingAmazon(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session?.user) return alert("ログインが必要です");
@@ -94,7 +61,7 @@ export default function StockInPage() {
       const consumeDaysNum = parseInt(formData.consumeDays, 10);
       const consumeAmountNum = parseInt(formData.consumeAmount, 10);
 
-      // ★ 修正：actions.ts が求めている daysLeft（残り日数）を計算して渡します
+      // 残り日数の計算
       const calculatedDaysLeft = consumeAmountNum > 0 
         ? Math.floor((currentStock / consumeAmountNum) * consumeDaysNum) 
         : 0;
@@ -103,7 +70,7 @@ export default function StockInPage() {
         name: formData.name, 
         stock: currentStock, 
         maxStock: parseInt(formData.maxStock, 10),
-        daysLeft: calculatedDaysLeft, // ★ これが不足していました
+        daysLeft: calculatedDaysLeft,
         consumeDays: consumeDaysNum, 
         consumeAmount: consumeAmountNum,
         imageUrl: formData.imageUrl, 
@@ -113,6 +80,7 @@ export default function StockInPage() {
     } catch (error) {
       console.error(error);
       alert("仕入れに失敗しました");
+    } finally {
       setLoading(false);
     }
   };
@@ -131,41 +99,61 @@ export default function StockInPage() {
         <LocalShippingIcon sx={{ fontSize: { xs: 28, sm: 32 }, color: 'primary.main' }} /> 新しい消耗品の仕入れ
       </Typography>
 
+      {/* =========================================
+          ★ 制限到達時の案内（月額100円のPROプランへ）
+          ========================================= */}
       {isLimitReached ? (
         <Paper elevation={0} sx={{ p: { xs: 4, md: 6 }, borderRadius: '32px', border: '1px solid #e2e8f0', textAlign: 'center', bgcolor: '#f8fafc' }}>
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}><Avatar sx={{ bgcolor: '#e2e8f0', width: 64, height: 64 }}><LockOutlinedIcon sx={{ fontSize: 32, color: '#475569' }} /></Avatar></Box>
           <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: '#0f172a' }}>VIP（PRO）席へのご案内</Typography>
           <Typography variant="body1" sx={{ color: '#475569', mb: 4, lineHeight: 1.8 }}>
             無料版（お通し）での仕入れは<strong>3品目</strong>までとなっております。<br />
-            パントリーの品をAmazon等で注文し、届いた際に<strong>「補充ボタン」を累計2回押していただく</strong>ことで、HabiTapの熟練者として自動的にVIP（PRO版）へ昇格し、4品目以降の仕入れが解禁されます。
+            4品目以降のパントリー管理をご希望のお客様は、月額100円のPROプラン（VIP席）へのアップグレードをお願いいたします。
           </Typography>
-          <Button variant="contained" size="large" onClick={() => router.push('/pantry')} sx={{ borderRadius: '24px', fontWeight: 'bold', px: 4, py: 1.5, bgcolor: '#0f172a', '&:hover': { bgcolor: '#1e293b' } }}>
-            パントリーへ戻る
+          <Button variant="contained" size="large" onClick={() => router.push('/account')} sx={{ borderRadius: '24px', fontWeight: 'bold', px: 4, py: 1.5, bgcolor: '#D4AF37', '&:hover': { bgcolor: '#b5952f' }, mb: 2, width: '100%', maxWidth: '300px' }}>
+            プランを確認する
           </Button>
+          <Box>
+            <Button variant="text" onClick={() => router.push('/pantry')} sx={{ color: '#64748b', fontWeight: 'bold' }}>
+              パントリーへ戻る
+            </Button>
+          </Box>
         </Paper>
       ) : (
         <Paper elevation={0} sx={{ p: { xs: 3, md: 5 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
           <form onSubmit={handleSubmit}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
 
-              <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f8fafc', border: '1px dashed #cbd5e1' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5, ml: 0.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a' }}>Amazon 商品URL</Typography>
-                  <Tooltip title="URLを貼り付けて魔法のステッキを押すと情報を取得します" placement="top"><InfoOutlinedIcon sx={{ fontSize: 16, color: '#94a3b8' }} /></Tooltip>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <TextField placeholder="https://www.amazon.co.jp/..." name="amazonUrl" value={formData.amazonUrl} onChange={handleChange} fullWidth sx={textFieldSx} />
-                  <Button variant="contained" onClick={handleFetchAmazon} disabled={fetchingAmazon || !formData.amazonUrl} startIcon={fetchingAmazon ? <CircularProgress size={20} color="inherit" /> : <AutoFixHighIcon />} sx={{ minWidth: { xs: '100%', sm: '140px' }, borderRadius: '16px', fontWeight: 'bold', bgcolor: '#475569', '&:hover': { bgcolor: '#334155' } }}>
-                    取得
-                  </Button>
-                </Box>
-              </Box>
-              
+              {/* =========================================
+                  ★ 完全手動の美しい入力フォーム
+                  ========================================= */}
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>商品名 <span style={{ color: '#ef4444' }}>*</span></Typography>
-                <TextField placeholder="例: カレーメシ" name="name" value={formData.name} onChange={handleChange} required fullWidth sx={textFieldSx} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <EditNoteIcon fontSize="small" /> 商品名 <span style={{ color: '#ef4444' }}>*</span>
+                </Typography>
+                <TextField placeholder="例: カレーメシ ビーフ" name="name" value={formData.name} onChange={handleChange} required fullWidth sx={textFieldSx} />
+              </Box>
+
+              <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 2 }}>商品情報（任意）</Typography>
+                
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <LinkIcon fontSize="small" /> 購入先のURL
+                  </Typography>
+                  <TextField placeholder="https://www.amazon.co.jp/... (補充ボタンのリンクになります)" name="amazonUrl" value={formData.amazonUrl} onChange={handleChange} fullWidth sx={textFieldSx} />
+                </Box>
+
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <ImageIcon fontSize="small" /> 画像URL <Typography component="span" variant="caption" color="text.secondary">※後日、直接画像をアップロードできるようになります</Typography>
+                  </Typography>
+                  <TextField placeholder="https://example.com/image.jpg" name="imageUrl" value={formData.imageUrl} onChange={handleChange} fullWidth sx={textFieldSx} />
+                </Box>
               </Box>
               
+              <Divider sx={{ borderColor: '#e2e8f0' }} />
+
               <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>現在の在庫数 *</Typography>
