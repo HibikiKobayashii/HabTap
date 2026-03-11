@@ -108,11 +108,10 @@ export default function AdminDashboardPage() {
   return (
     <Box sx={{ p: { xs: 2, md: 5 }, maxWidth: 1000, mx: 'auto', pb: 12 }}>
       
-     
-
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, gap: 1.5 }}>
         <SecurityIcon sx={{ fontSize: 32, color: '#8E24AA' }} />
-        <Typography variant="h4" sx={{ fontWeight: 'bold', letterSpacing: '-0.02em', fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
+        {/* ★ 修正：タイトルを黒（#0f172a）に固定 */}
+        <Typography variant="h4" sx={{ color: '#0f172a', fontWeight: 'bold', letterSpacing: '-0.02em', fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
           管理者ダッシュボード
         </Typography>
       </Box>
@@ -124,34 +123,36 @@ export default function AdminDashboardPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, color: 'text.secondary' }}>
               <GroupIcon /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>総ユーザー数</Typography>
             </Box>
-            <Typography variant="h3" sx={{ fontWeight: 'bold', color: 'primary.main', fontSize: { xs: '2.5rem', sm: '3rem' } }}>
+            <Typography variant="h3" sx={{ color: 'primary.main', fontWeight: 'bold', fontSize: { xs: '2.5rem', sm: '3rem' } }}>
               {stats.totalUsers} <Typography component="span" variant="h6" color="text.secondary">人</Typography>
             </Typography>
           </CardContent>
         </Card>
+        
         <Card elevation={0} sx={{ borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
           <CardContent sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, color: '#D4AF37' }}>
               <WorkspacePremiumIcon /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>PRO会員</Typography>
             </Box>
-            <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#D4AF37', fontSize: { xs: '2.5rem', sm: '3rem' } }}>
+            <Typography variant="h3" sx={{ color: '#D4AF37', fontWeight: 'bold', fontSize: { xs: '2.5rem', sm: '3rem' } }}>
               {stats.proUsers} <Typography component="span" variant="h6" color="text.secondary">人</Typography>
             </Typography>
           </CardContent>
         </Card>
+        
         <Card elevation={0} sx={{ borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
           <CardContent sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, color: 'text.secondary' }}>
               <InventoryIcon /><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>アイテム総数</Typography>
             </Box>
-            <Typography variant="h3" sx={{ fontWeight: 'bold', fontSize: { xs: '2.5rem', sm: '3rem' } }}>
+            {/* ★ 修正：数字を黒（#0f172a）に固定 */}
+            <Typography variant="h3" sx={{ color: '#0f172a', fontWeight: 'bold', fontSize: { xs: '2.5rem', sm: '3rem' } }}>
               {stats.totalItems} <Typography component="span" variant="h6" color="text.secondary">個</Typography>
             </Typography>
           </CardContent>
         </Card>
       </Box>
 
-      {/* ★ 修正：お皿の底（pb）をさらに深く（13）しました */}
       <Paper 
         elevation={0} 
         sx={{ 
@@ -163,7 +164,8 @@ export default function AdminDashboardPage() {
           mb: 4 
         }}
       >
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>アクティブユーザー推移</Typography>
+        {/* ★ 修正：グラフタイトルを黒（#0f172a）に固定 */}
+        <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 'bold', mb: 1 }}>アクティブユーザー推移</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: { xs: 6, sm: 4 } }}>
           登録者と実働者数の推移です。
         </Typography>
@@ -201,14 +203,14 @@ export default function AdminDashboardPage() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} ticks={yTicks} domain={[0, 'dataMax']} allowDecimals={false} />
-              <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }} itemStyle={{ fontWeight: 'bold' }} />
+              <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', color: '#0f172a' }} itemStyle={{ fontWeight: 'bold' }} />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
               <Line type="monotone" dataKey="ユーザー総数" stroke="#8E24AA" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} animationDuration={500} />
               <Line type="monotone" dataKey="アクティブユーザー" stroke="#4285F4" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} animationDuration={500} />
             </LineChart>
           </ResponsiveContainer>
 
-          {/* ★ 修正：X軸コントローラー。さらに下（-40px）へずらしました */}
+          {/* X軸コントローラー */}
           <Box sx={{ 
             ...controlBaseSx, 
             flexDirection: 'row', 
@@ -232,16 +234,17 @@ export default function AdminDashboardPage() {
 
       {/* コンバージョンセクション */}
       <Paper elevation={0} sx={{ p: { xs: 3, md: 5 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>PROプラン転換率</Typography>
+        {/* ★ 修正：コンバージョンタイトルと数値を黒（#0f172a）に固定 */}
+        <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 'bold', mb: 1 }}>PROプラン転換率</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          現在、 <strong>{proPercentage.toFixed(1)}%</strong> がPROプランです。
+          現在、 <strong style={{ color: '#0f172a' }}>{proPercentage.toFixed(1)}%</strong> がPROプランです。
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Box sx={{ flexGrow: 1 }}>
             <LinearProgress variant="determinate" value={proPercentage} sx={{ height: 12, borderRadius: '16px', backgroundColor: '#f8fafc', '& .MuiLinearProgress-bar': { backgroundColor: '#D4AF37', borderRadius: '16px' } }} />
           </Box>
-          <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 40, textAlign: 'right' }}>
+          <Typography variant="body2" sx={{ color: '#0f172a', fontWeight: 'bold', minWidth: 40, textAlign: 'right' }}>
             {proPercentage.toFixed(1)}%
           </Typography>
         </Box>
