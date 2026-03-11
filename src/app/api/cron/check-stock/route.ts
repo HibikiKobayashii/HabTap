@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import webpush from 'web-push';
 
+// ★ 追加：ログイン状態を確認する魔法をインポート
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
 webpush.setVapidDetails(
   'mailto:osomatsu287@gmail.com',
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
@@ -10,9 +14,17 @@ webpush.setVapidDetails(
 );
 
 export async function GET(request: Request) {
+  // 1. Vercelの自動巡回ロボットが持つ通行証を確認
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response('Unauthorized', { status: 401 });
+  const isAuthorizedCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  // 2. テストボタンを押した人物が「ログイン中のオーナー」かを確認
+  const session = await getServerSession(authOptions);
+  const isAuthorizedUser = !!session?.user;
+
+  // どちらの条件も満たさない完全な部外者のみ、追い返します（401）
+  if (!isAuthorizedCron && !isAuthorizedUser) {
+    return new Response('Unauthorized (Pass required)', { status: 401 });
   }
 
   try {
