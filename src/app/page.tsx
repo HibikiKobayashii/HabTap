@@ -1,8 +1,9 @@
 // src/app/page.tsx
 'use client';
 import { useEffect, useState } from 'react';
-import { Card, CardMedia, CardContent, Typography, Button, LinearProgress, Box, CircularProgress, Chip } from '@mui/material';
+import { Card, CardMedia, CardContent, Typography, Button, LinearProgress, Box, CircularProgress, Chip, IconButton, Tooltip } from '@mui/material';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined'; // ★ 白いお皿に乗せるベル
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { getUserItems } from './actions';
@@ -54,33 +55,55 @@ export default function HomePage() {
   return (
     <Box sx={{ p: { xs: 2, md: 5 }, pb: 12, maxWidth: 1400, mx: 'auto' }}>
       
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 3, md: 5 }, gap: 1.5 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', letterSpacing: '-0.02em' }}>
-          HabiTap
-        </Typography>
-        
-        {isPro ? (
-          <Chip 
-            label="PRO" 
-            size="small"
-            sx={{ bgcolor: '#D4AF37', color: '#fff', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4)' }} 
-          />
-        ) : (
-          <Chip 
-            label="無料プラン" 
-            size="small"
-            variant="outlined"
-            sx={{ color: 'primary.main', borderColor: 'primary.main', fontWeight: 'bold' }} 
-          />
-        )}
+      {/* =========================================
+          ★ ヘッダー領域：左にロゴ、右に案内ベル
+          ========================================= */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: { xs: 3, md: 5 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', letterSpacing: '-0.02em' }}>
+            HabiTap
+          </Typography>
+          
+          {isPro ? (
+            <Chip 
+              label="PRO" 
+              size="small"
+              sx={{ bgcolor: '#D4AF37', color: '#fff', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4)' }} 
+            />
+          ) : (
+            <Chip 
+              label="無料プラン" 
+              size="small"
+              variant="outlined"
+              sx={{ color: 'primary.main', borderColor: 'primary.main', fontWeight: 'bold' }} 
+            />
+          )}
 
-        {isAdmin && (
-          <Chip 
-            label="Admin" 
-            size="small"
-            sx={{ bgcolor: '#8E24AA', color: '#fff', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(142, 36, 170, 0.4)' }} 
-          />
-        )}
+          {isAdmin && (
+            <Chip 
+              label="Admin" 
+              size="small"
+              sx={{ bgcolor: '#8E24AA', color: '#fff', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(142, 36, 170, 0.4)' }} 
+            />
+          )}
+        </Box>
+
+        {/* ★ 白い丸いお皿に乗ったベルのアイコン */}
+        <Tooltip title="HabiTap Info（アップデート情報）" placement="bottom">
+          <IconButton 
+            onClick={() => router.push('/habitap-info')}
+            sx={{ 
+              bgcolor: '#ffffff', 
+              boxShadow: '0 4px 12px rgba(0,0,0,0.05)', 
+              border: '1px solid #e2e8f0',
+              '&:hover': { bgcolor: '#f8fafc', boxShadow: '0 6px 16px rgba(0,0,0,0.08)' },
+              width: 48,
+              height: 48,
+            }}
+          >
+            <NotificationsNoneOutlinedIcon sx={{ color: '#475569' }} />
+          </IconButton>
+        </Tooltip>
       </Box>
       
       {items.length === 0 ? (
@@ -102,9 +125,6 @@ export default function HomePage() {
                   alignItems: 'center', 
                   p: { xs: 1.5, md: 3 }, 
                   boxShadow: '0 8px 24px rgba(0,0,0,0.08)', 
-                  // =========================================
-                  // ★ 修正：オーナーご指定の、大胆かつ柔らかな「32px」
-                  // =========================================
                   borderRadius: '32px', 
                   height: '100%' 
                 }}
@@ -115,9 +135,6 @@ export default function HomePage() {
                     width: { xs: 85, md: 140 }, 
                     height: { xs: 85, md: 140 }, 
                     objectFit: 'contain', 
-                    // =========================================
-                    // ★ 修正：外枠の32pxに合わせて、中の画像も「24px」へ
-                    // =========================================
                     borderRadius: '24px' 
                   }}
                   image={item.imageUrl || ''}
@@ -139,9 +156,6 @@ export default function HomePage() {
                       value={progress} 
                       sx={{ 
                         height: 8, 
-                        // =========================================
-                        // プログレスバー自体も、全体の世界観に合わせて少し丸みを強化しました
-                        // =========================================
                         borderRadius: 4, 
                         mb: 2,
                         backgroundColor: '#f1f5f9', 
@@ -163,7 +177,6 @@ export default function HomePage() {
                       rel="noopener noreferrer"
                       startIcon={<ShoppingCartIcon />}
                       sx={{ 
-                        // ボタンも合わせて少し丸みを強くしています
                         borderRadius: '16px', 
                         fontWeight: 'bold', 
                         py: 1,
