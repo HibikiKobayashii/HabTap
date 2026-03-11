@@ -218,7 +218,8 @@ export default function PantryManagementPage() {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <KitchenIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-            <Typography variant="h4" sx={{ fontWeight: 'bold', letterSpacing: '-0.02em', fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
+            {/* ★ 修正：color: '#0f172a' を追加して黒色に固定 */}
+            <Typography variant="h4" sx={{ color: '#0f172a', fontWeight: 'bold', letterSpacing: '-0.02em', fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
               パントリー管理
             </Typography>
           </Box>
@@ -267,14 +268,13 @@ export default function PantryManagementPage() {
                   {!item.imageUrl && <KitchenIcon sx={{ color: '#cbd5e1' }} />}
                 </Avatar>
                 
-                {/* ★ 修正：名前を省略せず、複数行に美しく折り返すように変更 */}
                 <Box sx={{ flexGrow: 1, minWidth: 0, py: 1 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.1rem' }, mb: 1, wordBreak: 'break-word', lineHeight: 1.4 }}>
+                  {/* ★ 修正：商品名も color: '#0f172a' を追加して黒色に固定 */}
+                  <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.1rem' }, mb: 1, wordBreak: 'break-word', lineHeight: 1.4 }}>
                     {item.name}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: '500' }}>在庫: <strong style={{ color: item.stock <= 0 ? '#ef4444' : '#0f172a' }}>{item.stock}</strong> / {item.maxStock}</Typography>
-                    {/* ★ 修正：「約」を取り除き、断定的な表現にしました */}
                     <Chip label={`${item.daysLeft} 日分`} size="small" sx={{ bgcolor: item.daysLeft <= 2 ? '#fee2e2' : '#f1f5f9', color: item.daysLeft <= 2 ? '#b91c1c' : '#475569', fontWeight: 'bold', borderRadius: '12px' }} />
                   </Box>
                 </Box>
@@ -349,9 +349,10 @@ export default function PantryManagementPage() {
 
         {/* 各種ダイアログの盛り付け */}
         <Dialog open={consumeDialogOpen} onClose={handleCancelConsume} PaperProps={{ sx: { borderRadius: '32px', p: 1, boxShadow: '0 8px 32px rgba(0,0,0,0.08)' } }}>
-          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><InfoOutlinedIcon color="warning" />消費の確認</DialogTitle>
+          {/* ★ 修正：Dialogのタイトルも黒色に固定 */}
+          <DialogTitle sx={{ color: '#0f172a', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><InfoOutlinedIcon color="warning" />消費の確認</DialogTitle>
           <DialogContent>
-            <DialogContentText sx={{ color: 'text.primary', lineHeight: 1.8 }}>「<strong>{itemToConsume?.name}</strong>」の在庫を1つ消費しますか？<br /><Typography component="span" variant="body2" color="text.secondary">※予言（残り日数）も即座に再計算されます。</Typography></DialogContentText>
+            <DialogContentText sx={{ color: '#475569', lineHeight: 1.8 }}>「<strong>{itemToConsume?.name}</strong>」の在庫を1つ消費しますか？<br /><Typography component="span" variant="body2" color="text.secondary">※予言（残り日数）も即座に再計算されます。</Typography></DialogContentText>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button onClick={handleCancelConsume} sx={{ fontWeight: 'bold', color: 'text.secondary', borderRadius: '24px', px: 3 }}>キャンセル</Button>
@@ -360,9 +361,9 @@ export default function PantryManagementPage() {
         </Dialog>
 
         <Dialog open={restockDialogOpen} onClose={handleCancelRestock} PaperProps={{ sx: { borderRadius: '32px', p: 1, boxShadow: '0 8px 32px rgba(0,0,0,0.08)' } }}>
-          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><CheckCircleOutlineIcon color="success" />補充の確認</DialogTitle>
+          <DialogTitle sx={{ color: '#0f172a', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><CheckCircleOutlineIcon color="success" />補充の確認</DialogTitle>
           <DialogContent>
-            <DialogContentText sx={{ color: 'text.primary', lineHeight: 1.8 }}>「<strong>{itemToRestock?.name}</strong>」をパントリーに満タン補充しますか？<br /><Typography component="span" variant="body2" color="text.secondary">※時間は今日の0:00として記録されます。</Typography></DialogContentText>
+            <DialogContentText sx={{ color: '#475569', lineHeight: 1.8 }}>「<strong>{itemToRestock?.name}</strong>」をパントリーに満タン補充しますか？<br /><Typography component="span" variant="body2" color="text.secondary">※時間は今日の0:00として記録されます。</Typography></DialogContentText>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button onClick={handleCancelRestock} sx={{ fontWeight: 'bold', color: 'text.secondary', borderRadius: '24px', px: 3 }}>キャンセル</Button>
@@ -371,9 +372,9 @@ export default function PantryManagementPage() {
         </Dialog>
 
         <Dialog open={deleteDialogOpen} onClose={handleCancelDelete} PaperProps={{ sx: { borderRadius: '32px', p: 1, boxShadow: '0 8px 32px rgba(0,0,0,0.08)' } }}>
-          <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><WarningAmberIcon color="error" />削除の確認</DialogTitle>
+          <DialogTitle sx={{ color: '#0f172a', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><WarningAmberIcon color="error" />削除の確認</DialogTitle>
           <DialogContent>
-            <DialogContentText sx={{ color: 'text.primary', lineHeight: 1.8 }}>「<strong>{itemToDelete?.name}</strong>」をパントリーから完全に削除してもよろしいですか？<br /><Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>※この操作は取り消せません。</Typography></DialogContentText>
+            <DialogContentText sx={{ color: '#475569', lineHeight: 1.8 }}>「<strong>{itemToDelete?.name}</strong>」をパントリーから完全に削除してもよろしいですか？<br /><Typography component="span" variant="body2" color="error.main" sx={{ fontWeight: 'bold' }}>※この操作は取り消せません。</Typography></DialogContentText>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button onClick={handleCancelDelete} sx={{ fontWeight: 'bold', color: 'text.secondary', borderRadius: '24px', px: 3 }}>キャンセル</Button>
@@ -391,11 +392,11 @@ export default function PantryManagementPage() {
               <StarRoundedIcon sx={{ fontSize: 40, color: '#fff' }} />
             </Avatar>
           </Box>
-          <DialogTitle sx={{ fontWeight: 'bold', textAlign: 'center', fontSize: '1.4rem', color: '#0f172a' }}>
+          <DialogTitle sx={{ color: '#0f172a', fontWeight: 'bold', textAlign: 'center', fontSize: '1.4rem' }}>
             VIP席へようこそ
           </DialogTitle>
           <DialogContent>
-            <DialogContentText sx={{ color: 'text.primary', lineHeight: 1.8, textAlign: 'center' }}>
+            <DialogContentText sx={{ color: '#475569', lineHeight: 1.8, textAlign: 'center' }}>
               見事、パントリーの補充を<strong>2回</strong>達成いたしました。<br /><br />
               これより、あなたはHabiTapの熟練者（PRO）です。<br />
               <strong>4品目以降の仕入れ</strong>が可能となりました。さらなる快適な生活をお楽しみください。
