@@ -90,14 +90,22 @@ export default function StockInPage() {
 
     setLoading(true);
     try {
-      // ★ 修正：Vercelの厳格な審査（TypeScript）を通すため、
-      // 厨房（actions.ts）が求めていない userId を除外しました。
+      const currentStock = parseInt(formData.stock, 10);
+      const consumeDaysNum = parseInt(formData.consumeDays, 10);
+      const consumeAmountNum = parseInt(formData.consumeAmount, 10);
+
+      // ★ 修正：actions.ts が求めている daysLeft（残り日数）を計算して渡します
+      const calculatedDaysLeft = consumeAmountNum > 0 
+        ? Math.floor((currentStock / consumeAmountNum) * consumeDaysNum) 
+        : 0;
+
       await createItem({
         name: formData.name, 
-        stock: parseInt(formData.stock, 10), 
+        stock: currentStock, 
         maxStock: parseInt(formData.maxStock, 10),
-        consumeDays: parseInt(formData.consumeDays, 10), 
-        consumeAmount: parseInt(formData.consumeAmount, 10),
+        daysLeft: calculatedDaysLeft, // ★ これが不足していました
+        consumeDays: consumeDaysNum, 
+        consumeAmount: consumeAmountNum,
         imageUrl: formData.imageUrl, 
         amazonUrl: formData.amazonUrl,
       });
