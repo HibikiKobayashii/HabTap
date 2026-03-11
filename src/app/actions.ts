@@ -125,7 +125,7 @@ export async function createItem(data: {
   imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
 }) {
   try {
-    // クライアントから渡さず、ここで確実に身元を確認します
+    // クライアントからuserIdを渡さず、ここで確実に身元を確認します（安全性の極み）
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     if (!userId) return { error: '認証が必要です' };
@@ -234,52 +234,95 @@ export async function getAdminChartData(timeframe: 'day' | 'week' | 'month' = 'm
 
 /**
  * ==========================================
- * ★ Amazonデータの調達（Googlebotの変装 ＋ スマホ短縮URL対応）
+ * ★ Amazonデータの調達（二段構えの究極バイパス）
  * ==========================================
  */
 export async function fetchAmazonData(url: string) {
-  if (!url.match(/amazon\.co\.jp|amzn\.to|amzn\.asia/)) {
+  // 1. スマホアプリの短縮URLにも完全対応
+  if (!url.match(/amazon\.co\.jp|amzn\.to|amzn\.asia/i)) {
     return { error: 'AmazonのURL（amazon.co.jp, amzn.to, amzn.asia）をご提示ください' };
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
-      redirect: 'follow', 
-      next: { revalidate: 3600 } 
-    });
+    let finalUrl = url;
 
-    if (!res.ok) throw new Error('Access failed');
+    // 2. 短縮URLを展開して、最終的な行き先（本当のURL）を割り出します
+    try {
+      const initialRes = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        redirect: 'follow'
+      });
+      finalUrl = initialRes.url;
+    } catch (e) {
+      console.warn('[厨房] URLの展開に失敗しましたが、処理を続行します', e);
+    }
     
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    
-    let title = $('#productTitle').text().trim();
-    
-    if (!title) {
-      const rawTitle = $('title').text().trim();
-      title = rawTitle.replace(/^Amazon\.co\.jp\s*[:：\|]\s*/i, '').trim();
+    // 3. URLの中から、商品のマイナンバーである「ASIN（10桁の英数字）」を抽出します
+    const asinMatch = finalUrl.match(/(?:dp|product|asin)[/]([A-Z0-9]{10})/i) || finalUrl.match(/\/([A-Z0-9]{10})(?:[/?]|$)/i);
+    const asin = asinMatch ? asinMatch[1] : null;
+
+    // ==========================================
+    // 突破口 1：Yahoo!ショッピングルート（再現率：激高）
+    // ==========================================
+    if (asin) {
+      console.log(`[厨房] ASIN(${asin})を検知。Yahoo!ルートから調達します...`);
+      try {
+        const yahooUrl = `https://shopping.yahoo.co.jp/search?p=${asin}`;
+        const yahooRes = await fetch(yahooUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+        });
+        
+        if (yahooRes.ok) {
+          const yahooHtml = await yahooRes.text();
+          const $ = cheerio.load(yahooHtml);
+          
+          let name = '';
+          let imageUrl = '';
+
+          $('img').each((i, el) => {
+            const src = $(el).attr('src') || '';
+            const alt = $(el).attr('alt') || '';
+            if (src.includes('item-shopping.c.yimg.jp') && alt.length > 5) {
+              name = alt;
+              imageUrl = src;
+              return false; // 見つかったらループ終了
+            }
+          });
+
+          if (name && imageUrl) {
+             console.log(`[厨房] Yahoo!ルートでの調達に見事成功しました。`);
+             return { name, imageUrl };
+          }
+        }
+      } catch (yahooErr) {
+        console.warn(`[厨房] Yahoo!ルートで予期せぬエラー:`, yahooErr);
+      }
     }
 
-    let imageUrl = $('#landingImage').attr('src');
-    if (!imageUrl) imageUrl = $('#imgBlkFront').attr('src');
-    if (!imageUrl) {
-      imageUrl = $('meta[property="og:image"]').attr('content');
+    // ==========================================
+    // 突破口 2：運び屋（AllOrigins）ルート
+    // ==========================================
+    console.log(`[厨房] Yahoo!ルート失敗。運び屋（AllOrigins）を手配しAmazon本家へ再突撃します...`);
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(finalUrl)}`;
+    const proxyRes = await fetch(proxyUrl);
+    const proxyData = await proxyRes.json();
+    
+    if (proxyData.contents) {
+      const $ = cheerio.load(proxyData.contents);
+      let title = $('#productTitle').text().trim() || $('title').text().replace(/^Amazon\.co\.jp\s*[:：\|]\s*/i, '').trim();
+      let img = $('#landingImage').attr('src') || $('#imgBlkFront').attr('src') || $('meta[property="og:image"]').attr('content');
+      
+      if (title && !title.includes('ボット') && title !== 'Amazon.co.jp') {
+        console.log(`[厨房] 運び屋ルートでの調達に成功しました。`);
+        return { name: title, imageUrl: img || '' };
+      }
     }
 
-    if (!title || title === 'Amazon.co.jp' || title.includes('ボット')) {
-       return { error: 'Amazonの防壁に阻まれました。お手数ですが手動でご入力ください。' };
-    }
-
-    return { name: title, imageUrl: imageUrl || '' };
+    throw new Error('All bypass methods failed');
 
   } catch (error) {
     console.error('Amazonスクレイピングエラー:', error);
-    return { error: '情報の取得に失敗いたしました。手動でご入力いただけますでしょうか。' };
+    return { error: 'Amazonの強固な防壁に阻まれました。お手数ですが手動でご入力いただけますでしょうか。' };
   }
 }
 
