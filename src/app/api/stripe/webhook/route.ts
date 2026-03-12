@@ -4,51 +4,50 @@ import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+// ★ 修正ポイント：ここも最新の型に合わせます
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
+  apiVersion: '2026-02-25.clover' as any,
 });
 
-// ★ あとで .env.local に追加するWebhook専用の鍵
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+// ★ あとで Vercel の環境変数に追加するWebhook専用の鍵
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const signature = req.headers.get('stripe-signature') as string;
+  const sig = req.headers.get('stripe-signature');
 
-  let event: Stripe.Event;
+  let event;
 
   try {
-    // 偽物の報告を弾くための署名確認
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    if (!sig || !endpointSecret) {
+      throw new Error('Webhook signature or secret is missing');
+    }
+    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
   } catch (err: any) {
-    console.error(`Webhook署名エラー: ${err.message}`);
+    console.error(`❌ Webhook signature verification failed: ${err.message}`);
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
-  // 決済が完了（成功）した時の処理
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.Checkout.Session;
-    
-    // レジ係に預けておいた「お客様のID札」を取り出す
-    const userId = session.client_reference_id;
+  // イベントの種類に応じて処理を分岐
+  switch (event.type) {
+    case 'checkout.session.completed':
+    case 'invoice.payment_succeeded':
+      const session = event.data.object as any;
+      const userId = session.metadata?.userId;
 
-    if (userId) {
-      try {
-        // ★ オーナーの設計図（schema.prisma）通りに名簿を更新！
+      if (userId) {
+        // ★ 決済が成功したら、ユーザーを「PRO」プランへ昇格させる
         await prisma.user.update({
           where: { id: userId },
-          data: { 
-            plan: 'pro',
-            proSubscribedAt: new Date(), // 現在の時間を記録
-          },
+          data: { plan: 'pro' },
         });
-        console.log(`[成功] ユーザー ${userId} をPROプランへ格上げしました！`);
-      } catch (dbError) {
-        console.error('データベースの更新に失敗しました:', dbError);
+        console.log(`✅ User ${userId} has been upgraded to PRO!`);
       }
-    }
+      break;
+
+    default:
+      console.log(`🌀 Unhandled event type ${event.type}`);
   }
 
-  // Stripeへ「報告受け取りました！」と返事をする（必須）
   return NextResponse.json({ received: true });
 }
