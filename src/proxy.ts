@@ -1,4 +1,4 @@
-// src/proxy.ts (または src/middleware.ts)
+// src/proxy.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
@@ -6,7 +6,8 @@ import { getToken } from 'next-auth/jwt';
 // 簡易的なレート制限のための記憶
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 
-export async function proxy(req: NextRequest) { // ※ファイル名が middleware.ts の場合は middleware にしてください
+// ★ 修正：Next.js 16のルールに従い、関数名を "proxy" に変更しました
+export async function proxy(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const { pathname } = req.nextUrl;
 
@@ -15,11 +16,12 @@ export async function proxy(req: NextRequest) { // ※ファイル名が middlew
   const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1';
 
   // ==========================================
-  // ★ 1. 認証関連 ＆ 生体認証API は「聖域（顔パス）」にする
+  // ★ 1. 聖域（顔パス）リスト
   // ==========================================
   if (
     pathname.startsWith('/api/auth') || 
-    pathname.startsWith('/api/webauthn') // ← この一行が、生体認証ログインの命綱です
+    pathname.startsWith('/api/webauthn') ||
+    pathname.startsWith('/api/stripe/webhook') // Stripeの配達員は会員証なしで裏口へ通す
   ) {
     return NextResponse.next();
   }
@@ -46,7 +48,7 @@ export async function proxy(req: NextRequest) { // ※ファイル名が middlew
   // 3. 認証ガード
   if (!token && pathname !== '/login') {
     if (pathname.startsWith('/api/')) {
-      // ★ ここが最大の修正点：ただの文字列ではなく、JSONでお断りします
+      // ただの文字列ではなく、JSONでお断りします
       return NextResponse.json({ error: '認証が必要です。' }, { status: 401 });
     }
     return NextResponse.redirect(new URL('/login', req.url));

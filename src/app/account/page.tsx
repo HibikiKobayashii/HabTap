@@ -21,8 +21,13 @@ import PushSetting from '@/components/PushSetting';
 import { submitFeedback, getBiometricStatus, removeBiometricStatus } from '@/app/actions';
 import { startRegistration } from '@simplewebauthn/browser';
 
+import { loadStripe } from '@stripe/stripe-js';
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+
 export default function AccountPage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
 
   const [biometric, setBiometric] = useState(false);
@@ -30,6 +35,10 @@ export default function AccountPage() {
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  
+  const [clientSecret, setClientSecret] = useState('');
+  const [isLocallyPro, setIsLocallyPro] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -44,6 +53,19 @@ export default function AccountPage() {
   const showMessage = (msg: string, sev: AlertColor = 'info') => {
     setSnackbar({ open: true, message: msg, severity: sev });
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+
+    if (sessionId) {
+      setIsLocallyPro(true);
+      setClientSecret('');
+      showMessage('PROプランへのアップグレードが完了しました！', 'success');
+      update();
+      window.history.replaceState(null, '', '/account');
+    }
+  }, [update]);
 
   useEffect(() => {
     const syncStatus = async () => {
@@ -75,9 +97,32 @@ export default function AccountPage() {
 
   if (!session) return null;
 
-  const isPro = (session.user as any)?.plan === 'pro';
+  const isPro = (session.user as any)?.plan === 'pro' || isLocallyPro;
   const isAdmin = (session.user as any)?.role === 'admin';
   const adminPurple = '#8E24AA';
+
+  const handleUpgradeToPro = async () => {
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: (session.user as any).id })
+      });
+      const data = await res.json();
+      
+      if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
+      } else {
+        showMessage('決済画面の準備に失敗しました。', 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showMessage('通信エラーが発生しました。', 'error');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   const handleBiometricToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = event.target.checked;
@@ -183,6 +228,7 @@ export default function AccountPage() {
     color: 'text.primary', 
     borderBottom: '1px solid #e2e8f0',
     borderRadius: 0,
+    textTransform: 'none',
     '&:hover': { bgcolor: '#f8fafc' }
   };
 
@@ -191,8 +237,7 @@ export default function AccountPage() {
       <Box sx={{ p: { xs: 2, md: 5 }, maxWidth: 600, mx: 'auto', pb: { xs: 14, md: 16 } }}>
         <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#0f172a' }}>Account</Typography>
 
-        {/* --- ユーザープロフィールカード --- */}
-        <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', mb: 4, boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
+        <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', mb: 3, boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
             <Avatar src={session.user?.image || ''} sx={{ width: 64, height: 64 }} />
             <Box>
@@ -213,6 +258,43 @@ export default function AccountPage() {
           )}
         </Paper>
 
+        {!isPro && !clientSecret && (
+          <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #D4AF37', bgcolor: '#fffdf4', mb: 4, textAlign: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+              <WorkspacePremiumIcon sx={{ color: '#D4AF37' }} /> PROプランへアップグレード
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.6 }}>
+              月額100円で、4品目以上のパントリー管理が無制限に可能になります。
+            </Typography>
+            <Button 
+              variant="contained" 
+              fullWidth 
+              onClick={handleUpgradeToPro} 
+              disabled={checkoutLoading}
+              startIcon={checkoutLoading ? <CircularProgress size={20} color="inherit" /> : null}
+              sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, bgcolor: '#D4AF37', '&:hover': { bgcolor: '#b5952f' }, color: '#fff' }}
+            >
+              {checkoutLoading ? '準備中...' : 'PRO版にアップグレードする'}
+            </Button>
+          </Paper>
+        )}
+
+        {clientSecret && (
+          <Paper elevation={0} sx={{ mb: 4, p: { xs: 2, md: 3 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="subtitle1" fontWeight="bold">決済手続き</Typography>
+              <Button size="small" onClick={() => setClientSecret('')} sx={{ color: 'text.secondary', borderRadius: '16px' }}>
+                キャンセル
+              </Button>
+            </Box>
+            <Box sx={{ width: '100%', minHeight: '400px' }}>
+              <EmbeddedCheckoutProvider stripe={stripePromise} options={{clientSecret}}>
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider>
+            </Box>
+          </Paper>
+        )}
+
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>APP SETTINGS</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
           <PushSetting />
@@ -227,7 +309,6 @@ export default function AccountPage() {
           </Paper>
         </Box>
 
-        {/* --- フィードバックセクション --- */}
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>VOIX (お客様の声)</Typography>
         <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', mb: 4, boxShadow: '0 8px 32px rgba(0,0,0,0.03)', bgcolor: '#ffffff' }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>HabiTapへのご要望を管理人へお届けください。</Typography>
@@ -249,49 +330,20 @@ export default function AccountPage() {
           </Box>
         </Paper>
 
-        {/* --- リーガル・インフォメーション --- */}
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>LEGAL & INFO</Typography>
         <Box sx={{ mb: 4 }}>
-          <Button 
-            fullWidth 
-            onClick={() => router.push('/about')} 
-            endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} 
-            sx={linkButtonSx}
-          >
-            About HabiTap
-          </Button>
-          <Button 
-            fullWidth 
-            onClick={() => router.push('/terms')} 
-            endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} 
-            sx={linkButtonSx}
-          >
-            利用規約
-          </Button>
-          <Button 
-            fullWidth 
-            onClick={() => router.push('/privacy')} 
-            endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} 
-            sx={{ ...linkButtonSx, borderBottom: 'none' }}
-          >
-            プライバシーポリシー
-          </Button>
+          <Button fullWidth onClick={() => router.push('/about')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={linkButtonSx}>About HabiTap</Button>
+          <Button fullWidth onClick={() => router.push('/terms')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={linkButtonSx}>利用規約</Button>
+          <Button fullWidth onClick={() => router.push('/privacy')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={linkButtonSx}>プライバシーポリシー</Button>
+          {/* ★ 追加：特定商取引法に基づく表記のリンク（最後の要素なので borderBottom を消しています） */}
+          <Button fullWidth onClick={() => router.push('/tokushoho')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={{ ...linkButtonSx, borderBottom: 'none' }}>特定商取引法に基づく表記</Button>
         </Box>
 
-        <Button 
-          fullWidth 
-          onClick={() => signOut({ callbackUrl: '/' })} 
-          startIcon={<LogoutIcon />} 
-          sx={{ py: 1.5, color: 'error.main', fontWeight: 'bold', backgroundColor: '#fef2f2', borderRadius: '24px', '&:hover': { backgroundColor: '#fee2e2' } }}
-        >
-          ログアウト
-        </Button>
+        <Button fullWidth onClick={() => signOut({ callbackUrl: '/' })} startIcon={<LogoutIcon />} sx={{ py: 1.5, color: 'error.main', fontWeight: 'bold', backgroundColor: '#fef2f2', borderRadius: '24px', '&:hover': { backgroundColor: '#fee2e2' } }}>ログアウト</Button>
       </Box>
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '12px', fontWeight: 'bold' }}>
-          {snackbar.message}
-        </Alert>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '12px', fontWeight: 'bold' }}>{snackbar.message}</Alert>
       </Snackbar>
     </>
   );

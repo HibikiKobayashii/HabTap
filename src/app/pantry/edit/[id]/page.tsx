@@ -4,10 +4,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Box, Typography, TextField, Button, Paper, CircularProgress, IconButton } from '@mui/material';
+import { Box, Typography, TextField, Button, Paper, CircularProgress, IconButton, Divider } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
-import KitchenIcon from '@mui/icons-material/Kitchen';
+import ImageIcon from '@mui/icons-material/Image';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloseIcon from '@mui/icons-material/Close';
 
 import { getItem, updateItem } from '../../../actions'; 
 
@@ -20,16 +22,15 @@ export default function EditItemPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // DBから取得した元の画像URLを保持（変更がなければこれをそのまま使う）
+  const [originalImageUrl, setOriginalImageUrl] = useState('');
+
+  // 新しく選択された画像ファイルとプレビュー
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
-    name: '',
-    stock: '',
-    maxStock: '',
-    daysLeft: '',
-    imageUrl: '',
-    amazonUrl: '',
-    // ★ 追加：機能（UI）には出さないが、裏側で保持しておく「必須の隠し味」
-    consumeDays: 1,
-    consumeAmount: 1,
+    name: '', stock: '', maxStock: '', daysLeft: '', amazonUrl: '', consumeDays: 1, consumeAmount: 1,
   });
 
   useEffect(() => {
@@ -43,12 +44,15 @@ export default function EditItemPage() {
             stock: item.stock.toString(),
             maxStock: item.maxStock.toString(),
             daysLeft: item.daysLeft.toString(),
-            imageUrl: item.imageUrl || '',
             amazonUrl: item.amazonUrl || '',
-            // ★ 追加：DBから元のペース設定もしっかり引き継ぎます
             consumeDays: item.consumeDays,
             consumeAmount: item.consumeAmount,
           });
+          
+          if (item.imageUrl) {
+            setOriginalImageUrl(item.imageUrl);
+            setImagePreview(item.imageUrl); // 初期状態は元の画像を表示
+          }
         }
       } catch (error) {
         console.error("データの読み込みに失敗しました:", error);
@@ -64,25 +68,65 @@ export default function EditItemPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // 画像が選択されたときの処理
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  // 画像をクリアする処理（元の画像もクリアして白紙にする場合）
+  const handleClearImage = () => {
+    setImageFile(null);
+    if (imagePreview && imagePreview !== originalImageUrl) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImagePreview(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      // ★ 修正：actions.ts が求めるすべての引数を揃えて差し出します
+      let finalImageUrl = originalImageUrl; // 基本は元の画像を使う
+
+      // 新しい画像が選択されている場合、もしくは画像を消された場合は上書きする
+      if (imageFile) {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', imageFile);
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: uploadFormData,
+        });
+
+        if (!uploadRes.ok) throw new Error("画像のアップロードに失敗しました");
+        const uploadData = await uploadRes.json();
+        finalImageUrl = uploadData.url; 
+      } else if (!imagePreview) {
+        // 画像が「×」で消されて白紙のまま保存された場合
+        finalImageUrl = '';
+      }
+
       await updateItem(itemId, {
         name: formData.name,
         stock: parseInt(formData.stock, 10),
         maxStock: parseInt(formData.maxStock, 10),
         daysLeft: parseInt(formData.daysLeft, 10),
-        imageUrl: formData.imageUrl,
+        imageUrl: finalImageUrl, // ★ 確定した画像URLを保存
         amazonUrl: formData.amazonUrl,
         consumeDays: formData.consumeDays,
         consumeAmount: formData.consumeAmount,
       });
+      
       router.push('/pantry');
     } catch (error) {
       console.error("更新に失敗しました:", error);
+      alert("更新に失敗しました。");
+    } finally {
       setSubmitting(false);
     }
   };
@@ -129,35 +173,41 @@ export default function EditItemPage() {
         <form onSubmit={handleSubmit}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
             
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3, width: '100%' }}>
-              {formData.imageUrl ? (
-                <Box
-                  component="img"
-                  src={formData.imageUrl}
-                  alt={formData.name}
-                  sx={{ 
-                    maxWidth: '100%', 
-                    maxHeight: { xs: '300px', sm: '450px' }, 
-                    height: 'auto', 
-                    width: 'auto', 
-                    display: 'block', 
-                    border: 'none', 
-                    bgcolor: '#ffffff', 
-                    borderRadius: '16px', 
-                  }} 
-                />
-              ) : (
-                <Box sx={{ 
-                  display: 'flex', justifyContent: 'center', alignItems: 'center', 
-                  width: { xs: '120px', sm: '180px' }, 
-                  height: { xs: '120px', sm: '180px' }, 
-                  bgcolor: '#ffffff', 
-                  color: '#cbd5e1',
-                }}>
-                  <KitchenIcon sx={{ fontSize: { xs: 70, sm: 100 } }} />
+            {/* ★ 画像アップロードエリア（Edit用） */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 2, width: '100%', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <ImageIcon fontSize="small" /> 商品の画像
+              </Typography>
+              
+              {imagePreview ? (
+                <Box sx={{ position: 'relative', width: { xs: 200, sm: 260 }, height: { xs: 200, sm: 260 }, borderRadius: '24px', overflow: 'hidden', border: '2px solid #e2e8f0' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <IconButton 
+                    onClick={handleClearImage}
+                    sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(255,255,255,0.8)', '&:hover': { bgcolor: 'white' }, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+                    size="small"
+                  >
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
                 </Box>
+              ) : (
+                <Button
+                  component="label"
+                  sx={{
+                    width: '100%', maxWidth: { xs: 200, sm: 260 }, height: { xs: 200, sm: 260 }, border: '2px dashed #cbd5e1', borderRadius: '24px',
+                    display: 'flex', flexDirection: 'column', gap: 1, color: '#64748b', bgcolor: '#f8fafc',
+                    '&:hover': { bgcolor: '#f1f5f9', borderColor: '#94a3b8' }
+                  }}
+                >
+                  <CloudUploadIcon sx={{ fontSize: 40, color: '#94a3b8' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>画像をアップロード</Typography>
+                  <input type="file" hidden accept="image/*" onChange={handleImageChange} />
+                </Button>
               )}
             </Box>
+
+            <Divider sx={{ borderColor: '#e2e8f0', my: 1 }} />
 
             <Box>
               <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>
@@ -199,17 +249,8 @@ export default function EditItemPage() {
               </Box>
             </Box>
 
-            <Box>
-              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>
-                画像URL
-              </Typography>
-              <TextField 
-                placeholder="Amazonの画像アドレス等を貼り付け"
-                name="imageUrl" value={formData.imageUrl} onChange={handleChange} fullWidth sx={textFieldSx} 
-              />
-            </Box>
-
-            <Box>
+            <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0', mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 2 }}>商品情報（任意）</Typography>
               <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>
                 Amazon 商品URL
               </Typography>
@@ -224,7 +265,7 @@ export default function EditItemPage() {
               variant="contained" 
               size="large" 
               disabled={submitting}
-              sx={{ mt: 1, py: 1.5, fontSize: '1.1rem', fontWeight: 'bold', borderRadius: '24px' }}
+              sx={{ mt: 2, py: 1.5, fontSize: '1.1rem', fontWeight: 'bold', borderRadius: '24px' }}
             >
               {submitting ? <CircularProgress size={24} color="inherit" /> : '情報を更新する'}
             </Button>

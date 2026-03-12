@@ -6,7 +6,6 @@ import { revalidatePath } from 'next/cache';
 import webpush from 'web-push';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]/route";
-// ★ 削除: import * as cheerio from 'cheerio'; （スクレイピング用の刃を破棄）
 
 // ==========================================
 // ★ 副料理長への連絡網（Web Push設定）
@@ -19,10 +18,11 @@ webpush.setVapidDetails(
 
 /**
  * ==========================================
- * ★ 極秘の調理法：時間経過による「自動熟成（消費）」
+ * ★ 極秘の調理法：時間経過による「自動熟成」
  * ==========================================
  */
-async function autoConsumeItems(userId: string) {
+// ★ 修正：export を追加し、Cron API からも全員の時間を進められるようにしました
+export async function autoConsumeItems(userId: string) {
   const items = await prisma.item.findMany({ where: { userId } });
   const now = new Date();
   let hasUpdated = false;
@@ -84,11 +84,6 @@ export async function getItem(itemId: string) {
   });
 }
 
-/**
- * ==========================================
- * ★ 在庫の消費（一杯の注文）
- * ==========================================
- */
 export async function consumeItem(itemId: string) {
   try {
     const item = await prisma.item.findUnique({ where: { id: itemId } });
@@ -115,11 +110,6 @@ export async function getUserPlanAndItemCount(userId: string) {
   return { plan: user?.plan || 'free', itemCount: count };
 }
 
-/**
- * ==========================================
- * ★ 新規登録・更新
- * ==========================================
- */
 export async function createItem(data: {
   name: string; stock: number; maxStock: number; daysLeft: number; 
   imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
@@ -128,6 +118,13 @@ export async function createItem(data: {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as any)?.id;
     if (!userId) return { error: '認証が必要です' };
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const currentItemCount = await prisma.item.count({ where: { userId } });
+
+    if (user?.plan !== 'pro' && currentItemCount >= 3) {
+      return { error: '無料プランの登録上限（3件）に達しております。' };
+    }
 
     const newItem = await prisma.item.create({
       data: {
@@ -143,7 +140,7 @@ export async function createItem(data: {
     return { success: true, item: newItem };
   } catch (error) {
     console.error(error);
-    return { error: 'パントリーへの登録に失敗いたしました' };
+    return { error: '登録に失敗しました' };
   }
 }
 
@@ -170,15 +167,10 @@ export async function updateItem(itemId: string, data: {
     return { success: true, item: updated };
   } catch (error) {
     console.error(error);
-    return { error: '情報の更新に失敗いたしました' };
+    return { error: '情報の更新に失敗しました' };
   }
 }
 
-/**
- * ==========================================
- * ★ 廃棄（デリート）
- * ==========================================
- */
 export async function deleteItem(itemId: string) {
   if (!itemId) return { error: "IDが不明です" };
   try {
@@ -188,14 +180,15 @@ export async function deleteItem(itemId: string) {
     return { success: true };
   } catch (error) {
     console.error("廃棄処理失敗:", error);
-    return { error: "廃棄処理に失敗いたしました。お時間をおいて再度お試しください。" };
+    return { error: "廃棄処理に失敗しました" };
   }
 }
 
-// ---------------------------------------------------------
-// ★ 削除: fetchAmazonData() の全ロジックを破棄しました
-// ---------------------------------------------------------
-
+/**
+ * ==========================================
+ * ★ 支配人専用：管理統計
+ * ==========================================
+ */
 export async function getAdminStats() {
   const totalUsers = await prisma.user.count();
   const proUsers = await prisma.user.count({ where: { plan: 'pro' } });
@@ -235,6 +228,52 @@ export async function getAdminChartData(timeframe: 'day' | 'week' | 'month' = 'm
   return chartData;
 }
 
+/**
+ * ==========================================
+ * ★ 支配人専用：全ユーザー情報の取得と更新
+ * ==========================================
+ */
+export async function getAllUsers() {
+  try {
+    const session = await getServerSession(authOptions);
+    if ((session?.user as any)?.role !== 'admin') return [];
+
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { items: true }
+        }
+      }
+    });
+    return users;
+  } catch (error) {
+    console.error('ユーザー一覧取得失敗:', error);
+    return [];
+  }
+}
+
+export async function updateUserRolePlan(targetUserId: string, data: { role?: string, plan?: string }) {
+  try {
+    const session = await getServerSession(authOptions);
+    if ((session?.user as any)?.role !== 'admin') return { error: '権限がありません' };
+
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        ...(data.role && { role: data.role }),
+        ...(data.plan && { plan: data.plan }),
+      }
+    });
+    
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (error) {
+    console.error('ユーザー更新失敗:', error);
+    return { error: '更新に失敗しました' };
+  }
+}
+
 export async function savePushSubscription(userId: string, subscription: string) {
   try {
     await prisma.user.update({
@@ -250,95 +289,54 @@ export async function savePushSubscription(userId: string, subscription: string)
 
 export async function submitFeedback(userId: string, message: string) {
   if (!userId || !message.trim()) return { error: 'メッセージの内容が不足しております' };
-
   try {
-    await prisma.feedback.create({
-      data: { userId, message }
-    });
-
-    const admins = await prisma.user.findMany({
-      where: { role: 'admin', pushSubscription: { not: null } }
-    });
-
-    const payload = JSON.stringify({
-      title: 'HabiTap - Voix',
-      body: 'お客様から新しい声が届きました。',
-      url: '/feedback' 
-    });
-
+    await prisma.feedback.create({ data: { userId, message } });
+    const admins = await prisma.user.findMany({ where: { role: 'admin', pushSubscription: { not: null } } });
+    const payload = JSON.stringify({ title: 'HabiTap - Voix', body: 'お客様から新しい声が届きました。', url: '/feedback' });
     for (const admin of admins) {
       if (admin.pushSubscription) {
         try {
           const sub = JSON.parse(admin.pushSubscription);
           await webpush.sendNotification(sub, payload);
-        } catch (err) {
-          console.error('Push通知の送信失敗:', err);
-        }
+        } catch (err) { console.error('Push送信失敗:', err); }
       }
     }
-
     return { success: true };
   } catch (error) {
-    console.error('声の保存失敗:', error);
-    return { error: '声の保存に失敗いたしました' };
+    return { error: '保存に失敗しました' };
   }
 }
 
 export async function getFeedbacks() {
   try {
-    const feedbacks = await prisma.feedback.findMany({
+    return await prisma.feedback.findMany({
       orderBy: { createdAt: 'desc' }, 
-      include: {
-        user: {
-          select: { name: true, image: true, email: true } 
-        }
-      }
+      include: { user: { select: { name: true, image: true, email: true } } }
     });
-    return feedbacks;
-  } catch (error) {
-    console.error('声の取得失敗:', error);
-    return [];
-  }
+  } catch (error) { return []; }
 }
 
 export async function resolveFeedback(feedbackId: string) {
   if (!feedbackId) return { error: '無効なIDです' };
-
   try {
-    await prisma.feedback.update({
-      where: { id: feedbackId },
-      data: { isResolved: true }
-    });
+    await prisma.feedback.update({ where: { id: feedbackId }, data: { isResolved: true } });
     revalidatePath('/feedback');
     return { success: true };
-  } catch (error) {
-    console.error('対応状態の更新失敗:', error);
-    return { error: '更新に失敗いたしました' };
-  }
+  } catch (error) { return { error: '更新失敗' }; }
 }
 
 export async function getBiometricStatus(userId: string) {
   if (!userId) return false;
   try {
-    const authenticators = await prisma.authenticator.findMany({
-      where: { userId }
-    });
+    const authenticators = await prisma.authenticator.findMany({ where: { userId } });
     return authenticators.length > 0;
-  } catch (error) {
-    console.error('生体認証状況取得失敗:', error);
-    return false;
-  }
+  } catch (error) { return false; }
 }
 
 export async function removeBiometricStatus(userId: string) {
   if (!userId) return { error: "IDが不明です" };
   try {
-    await prisma.authenticator.deleteMany({
-      where: { userId }
-    });
+    await prisma.authenticator.deleteMany({ where: { userId } });
     return { success: true };
-  } catch (error) {
-    console.error('生体認証抹消失敗:', error);
-    return { error: '生体認証の解除に失敗いたしました' };
-  }
+  } catch (error) { return { error: '解除失敗' }; }
 }

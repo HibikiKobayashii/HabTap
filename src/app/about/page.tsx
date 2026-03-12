@@ -44,7 +44,7 @@ export default function AboutPage() {
           日用品が「いつの間にかなくなっている」というストレス。それを解決するために、タップ一つで在庫を管理し、時間経過による自動消費とプッシュ通知を組み合わせることで、管理そのものを意識させない体験を目指しています。
         </Typography>
 
-        <Divider sx={{ my: 4 }} />
+        <Divider sx={{ my: 4, borderColor: '#e2e8f0' }} />
 
         {/* =========================================
             2. 開発者プロフィール
@@ -54,14 +54,22 @@ export default function AboutPage() {
         </Typography>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: '1.2rem', fontWeight: 'bold' }}>
-            しの
+          
+          {/* ↓↓↓↓↓ ここにアイコン画像のURLを入れます ↓↓↓↓↓ */}
+          <Avatar 
+            src="ここに画像のURLを貼り付けてください" 
+            sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: '1.2rem', fontWeight: 'bold' }}
+          >
+            {/* URLが空、または画像が読み込めなかった時の「予備の文字」です */}
+            しのののめ
           </Avatar>
+          {/* ↑↑↑↑↑ ここまで ↑↑↑↑↑ */}
+
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>
               しのののめ
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
               開志専門職大学 情報学部 3年
             </Typography>
           </Box>
@@ -70,29 +78,6 @@ export default function AboutPage() {
         <Typography variant="body1" sx={{ color: '#475569', mb: 4, lineHeight: 1.8 }}>
           新潟を拠点に活動する学生エンジニア。開志専門職大学にてIoT技術とWebアプリケーションの開発を専攻しています。
           大学の企業内実習での経験を基に、ユーザー体験（UX）を最優先したプロダクト開発に取り組んでいます。HabiTapは、その実践の第一歩として、自身の日常生活における課題を解決するためにフルスタックで開発しました。
-        </Typography>
-
-        <Divider sx={{ my: 4 }} />
-
-        {/* =========================================
-            3. ポリシー
-            ========================================= */}
-        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: '#0f172a' }}>
-          ポリシーと注意事項
-        </Typography>
-        
-        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#0f172a' }}>
-          在庫数と消費予測について
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#64748b', mb: 3, lineHeight: 1.8 }}>
-          本アプリで表示される在庫数および残り日数は、設定された消費ペースに基づくシミュレーション値です。実際の使用状況により差異が生じる場合があります。プッシュ通知はあくまで「買い忘れ防止」の補助機能としてご利用ください。
-        </Typography>
-
-        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#0f172a' }}>
-          プライバシーとセキュリティ
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#64748b', mb: 0, lineHeight: 1.8 }}>
-          お客様の登録データは、最新の暗号化技術および生体認証（WebAuthn）を用いて厳重に保護されています。取得した情報はアプリの機能提供および利便性向上のためにのみ使用し、法令に基づく場合を除き、第三者に提供することはありません。
         </Typography>
 
       </Paper>
