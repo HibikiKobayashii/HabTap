@@ -102,26 +102,8 @@ export default function AccountPage() {
   const adminPurple = '#8E24AA';
 
   const handleUpgradeToPro = async () => {
-    setCheckoutLoading(true);
-    try {
-      const res = await fetch('/api/stripe/checkout', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: (session.user as any).id })
-      });
-      const data = await res.json();
-      
-      if (data.clientSecret) {
-        setClientSecret(data.clientSecret);
-      } else {
-        showMessage('決済画面の準備に失敗しました。', 'error');
-      }
-    } catch (error) {
-      console.error(error);
-      showMessage('通信エラーが発生しました。', 'error');
-    } finally {
-      setCheckoutLoading(false);
-    }
+    // 閉鎖中のため、関数自体もガードしておきます
+    return;
   };
 
   const handleBiometricToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -258,43 +240,27 @@ export default function AccountPage() {
           )}
         </Paper>
 
+        {/* ★ アップグレード導線の閉鎖対応 */}
         {!isPro && !clientSecret && (
-          <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #D4AF37', bgcolor: '#fffdf4', mb: 4, textAlign: 'center' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-              <WorkspacePremiumIcon sx={{ color: '#D4AF37' }} /> PROプランへアップグレード
+          <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', bgcolor: '#f8fafc', mb: 4, textAlign: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#94a3b8', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+              <WorkspacePremiumIcon sx={{ color: '#94a3b8' }} /> PROプラン（準備中）
             </Typography>
-            <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.6 }}>
-              月額100円で、4品目以上のパントリー管理が無制限に可能になります。
+            <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2, lineHeight: 1.6 }}>
+              現在、決済システムの最終調整を行っております。<br />公開まで今しばらくお待ちください。
             </Typography>
             <Button 
               variant="contained" 
               fullWidth 
-              onClick={handleUpgradeToPro} 
-              disabled={checkoutLoading}
-              startIcon={checkoutLoading ? <CircularProgress size={20} color="inherit" /> : null}
-              sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, bgcolor: '#D4AF37', '&:hover': { bgcolor: '#b5952f' }, color: '#fff' }}
+              disabled={true} // ★ ボタンを完全に封鎖
+              sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, bgcolor: '#e2e8f0', color: '#94a3b8' }}
             >
-              {checkoutLoading ? '準備中...' : 'PRO版にアップグレードする'}
+              現在ご利用いただけません
             </Button>
           </Paper>
         )}
 
-        {clientSecret && (
-          <Paper elevation={0} sx={{ mb: 4, p: { xs: 2, md: 3 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold">決済手続き</Typography>
-              <Button size="small" onClick={() => setClientSecret('')} sx={{ color: 'text.secondary', borderRadius: '16px' }}>
-                キャンセル
-              </Button>
-            </Box>
-            <Box sx={{ width: '100%', minHeight: '400px' }}>
-              <EmbeddedCheckoutProvider stripe={stripePromise} options={{clientSecret}}>
-                <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider>
-            </Box>
-          </Paper>
-        )}
-
+        {/* 以下、設定項目などの表示は継続 */}
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>APP SETTINGS</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
           <PushSetting />
@@ -335,7 +301,6 @@ export default function AccountPage() {
           <Button fullWidth onClick={() => router.push('/about')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={linkButtonSx}>About HabiTap</Button>
           <Button fullWidth onClick={() => router.push('/terms')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={linkButtonSx}>利用規約</Button>
           <Button fullWidth onClick={() => router.push('/privacy')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={linkButtonSx}>プライバシーポリシー</Button>
-          {/* ★ 追加：特定商取引法に基づく表記のリンク（最後の要素なので borderBottom を消しています） */}
           <Button fullWidth onClick={() => router.push('/tokushoho')} endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />} sx={{ ...linkButtonSx, borderBottom: 'none' }}>特定商取引法に基づく表記</Button>
         </Box>
 
