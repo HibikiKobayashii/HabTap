@@ -9,6 +9,7 @@ export default function TokushohoPage() {
   const router = useRouter();
   const { status } = useSession();
 
+  // 会員確認中のローディング
   if (status === 'loading') {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -17,13 +18,14 @@ export default function TokushohoPage() {
     );
   }
 
+  // 非会員（部外者）は入り口（トップ）へお引き取り願う
   if (status === 'unauthenticated') {
     router.push('/');
     return null;
   }
 
-  // ★ オーナーの品格を守る、誠実な言い回しにブラッシュアップ
-  const sincereDisclosure = "個人情報保護および防犯の観点から、所在地および電話番号については本ページ上では非公開としております。特定商取引法に基づき、下記メールアドレス宛にご請求いただければ、遅滞なく電磁的記録（電子メール等）により提供いたします。";
+  // ★ オーナーの品格を守る、誠実かつ法的な防壁
+  const sincereDisclosure = "個人情報保護および防犯の観点から、所在地および電話番号については本ページ上では非公開としております。特定商取引法に基づき、下記メールアドレス宛にご請求いただければ、ご本人確認のうえ、遅滞なく電磁的記録（電子メール等）により提供いたします。";
 
   const infoList = [
     { label: '販売事業者名', value: '小林 響' },
@@ -35,7 +37,7 @@ export default function TokushohoPage() {
     { label: '支払方法', value: 'クレジットカード決済（Stripeを使用）' },
     { 
       label: '代金の支払時期', 
-      value: '初回お申し込み時に決済が発生し、2回目以降は毎月1日に自動決済が行われます。' 
+      value: '初回お申し込み時に即時決済が発生します。2回目以降の継続料金については、毎月1日に自動的に決済が行われます。' 
     },
     { label: 'サービスの提供時期', value: 'クレジットカード決済完了後、ただちにご利用いただけます。' },
     { label: '返品・キャンセルに関する特約', value: '提供するデジタルサービスの性質上、購入後のキャンセルや返金には応じられません。サブスクリプションの解約は、アカウント設定画面からいつでも可能であり、解約手続き後も次回更新日までは引き続きサービスをご利用いただけます。' },
@@ -46,7 +48,7 @@ export default function TokushohoPage() {
       <Button 
         startIcon={<ArrowBackIcon />} 
         onClick={() => router.back()} 
-        sx={{ mb: 3, color: 'text.secondary', fontWeight: 'bold' }}
+        sx={{ mb: 3, color: 'text.secondary', fontWeight: 'bold', textTransform: 'none' }}
       >
         戻る
       </Button>
