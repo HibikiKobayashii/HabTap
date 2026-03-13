@@ -21,7 +21,8 @@ export async function proxy(req: NextRequest) {
   if (
     pathname.startsWith('/api/auth') || 
     pathname.startsWith('/api/webauthn') ||
-    pathname.startsWith('/api/stripe/webhook') // Stripeの配達員は会員証なしで裏口へ通す
+    pathname.startsWith('/api/stripe/webhook') || // Stripeの配達員は会員証なしで裏口へ通す
+    pathname.startsWith('/api/cron') // ★ 追加：Vercelロボットも敷地内へ通す（合言葉の確認は奥のroute.tsで行う）
   ) {
     return NextResponse.next();
   }
