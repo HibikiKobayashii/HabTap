@@ -17,6 +17,7 @@ import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import SendIcon from '@mui/icons-material/Send';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 
 import PushSetting from '@/components/PushSetting';
 import { submitFeedback, getBiometricStatus, removeBiometricStatus } from '@/app/actions';
@@ -38,7 +39,8 @@ export default function AccountPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false); // ★ ポータル遷移中のローディング状態
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [isTestingPush, setIsTestingPush] = useState(false); // ★ 通知テスト用のローディング状態
   
   const [clientSecret, setClientSecret] = useState('');
   const [isLocallyPro, setIsLocallyPro] = useState(false);
@@ -104,7 +106,30 @@ export default function AccountPage() {
   const isAdmin = (session.user as any)?.role === 'admin';
   const adminPurple = '#8E24AA';
 
-  // 【支配人専用】テスト決済への入り口
+  // 【支配人専用】テスト通知の発射
+  const handleTestNotification = async () => {
+    setIsTestingPush(true);
+    try {
+      const res = await fetch('/api/admin/test-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: (session.user as any).id })
+      });
+      const data = await res.json();
+      
+      if (data.error) {
+        showMessage(data.error, 'error');
+      } else {
+        showMessage('テスト通知を送信しました。端末をご確認ください。', 'success');
+      }
+    } catch (error) {
+      console.error(error);
+      showMessage('通信エラーが発生しました。', 'error');
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
+
   const handleUpgradeToPro = async () => {
     if (!isAdmin) {
       showMessage('現在、一般公開に向けた準備中です。', 'warning');
@@ -133,7 +158,6 @@ export default function AccountPage() {
     }
   };
 
-  // ★ 追加：カスタマーポータル（解約・カード変更）への案内係
   const handleManageSubscription = async () => {
     setPortalLoading(true);
     try {
@@ -145,7 +169,6 @@ export default function AccountPage() {
       const data = await res.json();
 
       if (data.url) {
-        // StripeのVIPルームへお客様をお連れする
         window.location.href = data.url;
       } else {
         showMessage(data.error || 'ポータルの準備に失敗しました。一度ログアウトをお試しください。', 'error');
@@ -158,7 +181,6 @@ export default function AccountPage() {
     }
   };
 
-  // 生体認証の切り替え処理
   const handleBiometricToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = event.target.checked;
     if (!session?.user) {
@@ -236,7 +258,6 @@ export default function AccountPage() {
     }
   };
 
-  // フィードバック送信処理
   const handleFeedbackSubmit = async () => {
     if (!feedback.trim() || !session.user) return;
     
@@ -288,14 +309,30 @@ export default function AccountPage() {
             <Chip label={isPro ? "PRO 会員" : "無料プラン"} variant={isPro ? "filled" : "outlined"} sx={isPro ? { bgcolor: '#D4AF37', color: '#fff', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(212, 175, 55, 0.4)' } : { color: 'primary.main', borderColor: 'primary.main', fontWeight: 'bold' }} />
           </Box>
           {isAdmin && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
-              <Typography sx={{ fontWeight: '500' }}>権限</Typography>
-              <Chip label="支配人 (Admin)" size="small" sx={{ bgcolor: adminPurple, color: '#fff', fontWeight: 'bold' }} />
-            </Box>
+            <>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1 }}>
+                <Typography sx={{ fontWeight: '500' }}>権限</Typography>
+                <Chip label="支配人 (Admin)" size="small" sx={{ bgcolor: adminPurple, color: '#fff', fontWeight: 'bold' }} />
+              </Box>
+              {/* ★ 管理者専用：通知テストボタン */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, mt: 1, borderTop: '1px dashed #e2e8f0' }}>
+                <Typography sx={{ fontWeight: '500', fontSize: '0.9rem', color: 'text.secondary' }}>通知テスト</Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={handleTestNotification}
+                  disabled={isTestingPush}
+                  startIcon={isTestingPush ? <CircularProgress size={14} color="inherit" /> : <NotificationsActiveIcon sx={{fontSize: 16}} />}
+                  sx={{ borderRadius: '16px', textTransform: 'none', color: adminPurple, borderColor: adminPurple, '&:hover': { bgcolor: '#f3e5f5' } }}
+                >
+                  歓迎通知を発射
+                </Button>
+              </Box>
+            </>
           )}
         </Paper>
 
-        {/* ★ PRO会員向け：契約管理（カスタマーポータル）への扉 */}
+        {/* PRO会員向け：契約管理（カスタマーポータル）への扉 */}
         {isPro && (
           <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #D4AF37', bgcolor: '#fffdf4', mb: 4, textAlign: 'center' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
@@ -320,7 +357,6 @@ export default function AccountPage() {
         {/* 非PRO会員向け：アップグレード導線 */}
         {!isPro && !clientSecret && (
           isAdmin ? (
-            // 【支配人専用】テスト決済用のアクティブなボタン
             <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #D4AF37', bgcolor: '#fffdf4', mb: 4, textAlign: 'center' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                 <WorkspacePremiumIcon sx={{ color: '#D4AF37' }} /> 【Admin専用】PROプランへアップグレード
@@ -340,7 +376,6 @@ export default function AccountPage() {
               </Button>
             </Paper>
           ) : (
-            // 【一般ユーザー用】閉鎖中の看板
             <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', bgcolor: '#f8fafc', mb: 4, textAlign: 'center' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#94a3b8', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                 <WorkspacePremiumIcon sx={{ color: '#94a3b8' }} /> PROプラン（準備中）
@@ -360,7 +395,6 @@ export default function AccountPage() {
           )
         )}
 
-        {/* 決済用の埋め込みコンポーネント */}
         {clientSecret && (
           <Paper elevation={0} sx={{ mb: 4, p: { xs: 2, md: 3 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -377,7 +411,6 @@ export default function AccountPage() {
           </Paper>
         )}
 
-        {/* 各種設定メニュー */}
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>APP SETTINGS</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
           <PushSetting />
