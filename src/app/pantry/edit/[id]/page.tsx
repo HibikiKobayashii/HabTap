@@ -22,15 +22,21 @@ export default function EditItemPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // DBから取得した元の画像URLを保持（変更がなければこれをそのまま使う）
+  // DBから取得した元の画像URLを保持
   const [originalImageUrl, setOriginalImageUrl] = useState('');
 
   // 新しく選択された画像ファイルとプレビュー
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // ★ 修正: daysLeft（残り日数）の手入力を廃止し、consumeDaysとconsumeAmountを追加
   const [formData, setFormData] = useState({
-    name: '', stock: '', maxStock: '', daysLeft: '', amazonUrl: '', consumeDays: 1, consumeAmount: 1,
+    name: '', 
+    stock: '', 
+    maxStock: '', 
+    amazonUrl: '', 
+    consumeDays: '1', 
+    consumeAmount: '1',
   });
 
   useEffect(() => {
@@ -43,15 +49,14 @@ export default function EditItemPage() {
             name: item.name,
             stock: item.stock.toString(),
             maxStock: item.maxStock.toString(),
-            daysLeft: item.daysLeft.toString(),
             amazonUrl: item.amazonUrl || '',
-            consumeDays: item.consumeDays,
-            consumeAmount: item.consumeAmount,
+            consumeDays: item.consumeDays.toString(),
+            consumeAmount: item.consumeAmount.toString(),
           });
           
           if (item.imageUrl) {
             setOriginalImageUrl(item.imageUrl);
-            setImagePreview(item.imageUrl); // 初期状態は元の画像を表示
+            setImagePreview(item.imageUrl);
           }
         }
       } catch (error) {
@@ -68,7 +73,6 @@ export default function EditItemPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // 画像が選択されたときの処理
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -77,7 +81,6 @@ export default function EditItemPage() {
     }
   };
 
-  // 画像をクリアする処理（元の画像もクリアして白紙にする場合）
   const handleClearImage = () => {
     setImageFile(null);
     if (imagePreview && imagePreview !== originalImageUrl) {
@@ -91,9 +94,8 @@ export default function EditItemPage() {
     setSubmitting(true);
 
     try {
-      let finalImageUrl = originalImageUrl; // 基本は元の画像を使う
+      let finalImageUrl = originalImageUrl;
 
-      // 新しい画像が選択されている場合、もしくは画像を消された場合は上書きする
       if (imageFile) {
         const uploadFormData = new FormData();
         uploadFormData.append('file', imageFile);
@@ -107,19 +109,24 @@ export default function EditItemPage() {
         const uploadData = await uploadRes.json();
         finalImageUrl = uploadData.url; 
       } else if (!imagePreview) {
-        // 画像が「×」で消されて白紙のまま保存された場合
         finalImageUrl = '';
       }
 
+      // ★ 修正: 在庫と消費ペースから「残り日数（daysLeft）」を自動再計算する！
+      const currentStock = parseInt(formData.stock, 10);
+      const consumeDaysNum = parseInt(formData.consumeDays, 10);
+      const consumeAmountNum = parseInt(formData.consumeAmount, 10);
+      const calculatedDaysLeft = consumeAmountNum > 0 ? Math.floor((currentStock / consumeAmountNum) * consumeDaysNum) : 0;
+
       await updateItem(itemId, {
         name: formData.name,
-        stock: parseInt(formData.stock, 10),
+        stock: currentStock,
         maxStock: parseInt(formData.maxStock, 10),
-        daysLeft: parseInt(formData.daysLeft, 10),
-        imageUrl: finalImageUrl, // ★ 確定した画像URLを保存
+        daysLeft: calculatedDaysLeft, // 自動計算した日数を保存
+        imageUrl: finalImageUrl,
         amazonUrl: formData.amazonUrl,
-        consumeDays: formData.consumeDays,
-        consumeAmount: formData.consumeAmount,
+        consumeDays: consumeDaysNum,
+        consumeAmount: consumeAmountNum,
       });
       
       router.push('/pantry');
@@ -140,11 +147,9 @@ export default function EditItemPage() {
   }
 
   const textFieldSx = {
-    '& .MuiOutlinedInput-root': {
-      borderRadius: '16px',
-      backgroundColor: '#ffffff',
-    }
+    '& .MuiOutlinedInput-root': { borderRadius: '16px', backgroundColor: '#ffffff' }
   };
+  const adornmentSx = { ml: 1, color: '#64748b', whiteSpace: 'nowrap', minWidth: 'fit-content' };
 
   return (
     <Box sx={{ p: { xs: 2, md: 5 }, maxWidth: 800, mx: 'auto', pb: 12 }}>
@@ -173,7 +178,6 @@ export default function EditItemPage() {
         <form onSubmit={handleSubmit}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
             
-            {/* ★ 画像アップロードエリア（Edit用） */}
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 2, width: '100%', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <ImageIcon fontSize="small" /> 商品の画像
@@ -238,13 +242,23 @@ export default function EditItemPage() {
                   name="maxStock" type="number" value={formData.maxStock} onChange={handleChange} required fullWidth sx={textFieldSx} 
                 />
               </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>
-                  残り何日分か <span style={{ color: '#ef4444' }}>*</span>
-                </Typography>
+            </Box>
+
+            {/* ★ 追加: 消費ペースの編集エリア */}
+            <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 2, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                消費のペース <span style={{ color: '#ef4444' }}>*</span>
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 <TextField 
-                  placeholder="例: 14"
-                  name="daysLeft" type="number" value={formData.daysLeft} onChange={handleChange} required fullWidth sx={textFieldSx} 
+                  name="consumeDays" type="number" value={formData.consumeDays} onChange={handleChange} required 
+                  InputProps={{ endAdornment: <Typography variant="body2" sx={adornmentSx}>日間で</Typography> }} 
+                  sx={{ flex: 1, ...textFieldSx }} 
+                />
+                <TextField 
+                  name="consumeAmount" type="number" value={formData.consumeAmount} onChange={handleChange} required 
+                  InputProps={{ endAdornment: <Typography variant="body2" sx={adornmentSx}>個使う</Typography> }} 
+                  sx={{ flex: 1, ...textFieldSx }} 
                 />
               </Box>
             </Box>

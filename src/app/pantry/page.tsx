@@ -24,6 +24,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 
 import { getUserItems, deleteItem, consumeItem } from '../actions';
 
+// ★ 修正：Itemの型定義に「消費ペース」を追加
 type Item = {
   id: string;
   name: string;
@@ -31,6 +32,8 @@ type Item = {
   maxStock: number;
   daysLeft: number;
   imageUrl: string | null;
+  consumeDays: number;   // 追加
+  consumeAmount: number; // 追加
 };
 
 export default function PantryManagementPage() {
@@ -218,7 +221,6 @@ export default function PantryManagementPage() {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <KitchenIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-            {/* ★ 修正：color: '#0f172a' を追加して黒色に固定 */}
             <Typography variant="h4" sx={{ color: '#0f172a', fontWeight: 'bold', letterSpacing: '-0.02em', fontSize: { xs: '1.8rem', sm: '2.125rem' } }}>
               パントリー管理
             </Typography>
@@ -269,13 +271,19 @@ export default function PantryManagementPage() {
                 </Avatar>
                 
                 <Box sx={{ flexGrow: 1, minWidth: 0, py: 1 }}>
-                  {/* ★ 修正：商品名も color: '#0f172a' を追加して黒色に固定 */}
                   <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 'bold', fontSize: { xs: '1rem', sm: '1.1rem' }, mb: 1, wordBreak: 'break-word', lineHeight: 1.4 }}>
                     {item.name}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: '500' }}>在庫: <strong style={{ color: item.stock <= 0 ? '#ef4444' : '#0f172a' }}>{item.stock}</strong> / {item.maxStock}</Typography>
                     <Chip label={`${item.daysLeft} 日分`} size="small" sx={{ bgcolor: item.daysLeft <= 2 ? '#fee2e2' : '#f1f5f9', color: item.daysLeft <= 2 ? '#b91c1c' : '#475569', fontWeight: 'bold', borderRadius: '12px' }} />
+                    
+                    {/* ★ ここに隠し味！ 消費ペースを上品に添えました */}
+                    <Tooltip title="設定されている消費のペース" placement="top">
+                      <Typography variant="caption" sx={{ color: '#64748b', bgcolor: '#f8fafc', px: 1, py: 0.5, borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <AutorenewIcon sx={{ fontSize: 14 }} /> {item.consumeDays}日で{item.consumeAmount}個
+                      </Typography>
+                    </Tooltip>
                   </Box>
                 </Box>
 
@@ -346,10 +354,8 @@ export default function PantryManagementPage() {
           </MenuItem>
         </Menu>
 
-
         {/* 各種ダイアログの盛り付け */}
         <Dialog open={consumeDialogOpen} onClose={handleCancelConsume} PaperProps={{ sx: { borderRadius: '32px', p: 1, boxShadow: '0 8px 32px rgba(0,0,0,0.08)' } }}>
-          {/* ★ 修正：Dialogのタイトルも黒色に固定 */}
           <DialogTitle sx={{ color: '#0f172a', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}><InfoOutlinedIcon color="warning" />消費の確認</DialogTitle>
           <DialogContent>
             <DialogContentText sx={{ color: '#475569', lineHeight: 1.8 }}>「<strong>{itemToConsume?.name}</strong>」の在庫を1つ消費しますか？<br /><Typography component="span" variant="body2" color="text.secondary">※予言（残り日数）も即座に再計算されます。</Typography></DialogContentText>
