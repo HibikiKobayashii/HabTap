@@ -80,8 +80,16 @@ export async function GET(request: Request) {
         const sub = JSON.parse(item.user.pushSubscription);
         await webpush.sendNotification(sub, payload);
         results.sentCount++;
+        
+        // ==========================================
+        // ★ ここが隠し味！ 厨房の監視カメラ（ログ）に誰に送ったかを明確に記録する
+        // ==========================================
+        const userName = item.user.name || item.user.email || '名無し';
+        console.log(`✅ [送信成功] 宛先: ${userName} 様 | 商品: ${item.name} (残り${item.daysLeft}日)`);
+        
       } catch (err) {
-        console.error(`通知送信失敗 (ItemId: ${item.id}):`, err);
+        const userName = item.user.name || item.user.email || '名無し';
+        console.error(`❌ [送信失敗] 宛先: ${userName} 様 | ItemId: ${item.id}`, err);
         results.errors.push({ itemId: item.id, error: String(err) });
       }
     }
