@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { PrismaClient } from '@prisma/client';
+import webpush from 'web-push'; // ★ 追加：プッシュ通知用の配達員
 
 const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -9,6 +10,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+// ★ Web Pushの初期設定（配達員の身分証をセット）
+// 既存のプッシュ通知機能で使っているVAPIDキーをここで読み込みます
+if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:admin@habitap.app', // 連絡先（ダミーでも動作しますが、形式上必要です）
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -35,15 +46,31 @@ export async function POST(req: Request) {
       const customerId = session.customer; // Stripeが発行した「顧客ID」
 
       if (userId && customerId) {
-        // PROプランへ昇格させつつ、顧客IDを金庫にしまう
-        await prisma.user.update({
+        // PROプランへ昇格させつつ、顧客IDを金庫にしまう。
+        // 同時に、お客様の「プッシュ通知の宛先（pushSubscription）」も引っ張り出す。
+        const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: { 
             plan: 'pro',
-            stripeCustomerId: customerId, // 追加！
+            stripeCustomerId: customerId, 
           },
         });
         console.log(`✅ User ${userId} upgraded to PRO! CustomerID: ${customerId}`);
+
+        // ★ 追加：お客様へ「歓迎のプッシュ通知」を送信
+        if (updatedUser.pushSubscription) {
+          try {
+            const subscription = JSON.parse(updatedUser.pushSubscription);
+            const payload = JSON.stringify({
+              title: '👑 HabiTap PROへようこそ！',
+              body: 'ご契約ありがとうございます。初回の決済は「翌月1日」より開始されます。ご契約内容はアカウントページ、またはStripeからのご案内からいつでもご確認いただけます。',
+            });
+            await webpush.sendNotification(subscription, payload);
+            console.log('📢 歓迎のプッシュ通知を送信しました。');
+          } catch (error) {
+            console.error('プッシュ通知の送信エラー:', error);
+          }
+        }
       }
       break;
     }
@@ -56,7 +83,7 @@ export async function POST(req: Request) {
       break;
     }
 
-    // ★ 3. サブスクリプションが解約された時（追加仕込み！）
+    // ★ 3. サブスクリプションが解約された時
     case 'customer.subscription.deleted': {
       const subscription = event.data.object as any;
       const customerId = subscription.customer;
