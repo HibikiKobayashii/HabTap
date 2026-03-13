@@ -22,23 +22,26 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   const isAuthorizedUser = !!session?.user;
 
+  // ==========================================
+  // ★ 修正：401で弾く前に、厨房の監視カメラ（ログ）にしっかり記録を残す！
+  // ==========================================
   if (!isAuthorizedCron && !isAuthorizedUser) {
+    console.error(`🚨 [Cron] 401 Unauthorized: 警備員に弾かれました。`);
+    console.error(`👉 原因: 合言葉（CRON_SECRET）の不一致、またはログインセッションがありません。`);
     return new Response('Unauthorized (Pass required)', { status: 401 });
   }
 
   try {
     console.log('🤖 [Cron] 自動在庫チェックを開始します...');
 
-    // ==========================================
-    // ★ 追加：通知を探す前に、全ユーザーの「時間のネジ」を巻く（在庫を最新にする）
-    // ==========================================
+    // 通知を探す前に、全ユーザーの「時間のネジ」を巻く（在庫を最新にする）
     const allUsers = await prisma.user.findMany({ select: { id: true } });
     for (const user of allUsers) {
       await autoConsumeItems(user.id);
     }
     console.log('🤖 [Cron] 全ユーザーの在庫状況を最新の時間に更新しました。');
 
-    // ★ 修正：「残り2日」と「残り0日」のアイテムを同時に探し出します（時間は最新になっています！）
+    // 「残り2日」と「残り0日」のアイテムを同時に探し出します
     const targetItems = await prisma.item.findMany({
       where: {
         daysLeft: { in: [0, 2] },
@@ -81,9 +84,7 @@ export async function GET(request: Request) {
         await webpush.sendNotification(sub, payload);
         results.sentCount++;
         
-        // ==========================================
-        // ★ ここが隠し味！ 厨房の監視カメラ（ログ）に誰に送ったかを明確に記録する
-        // ==========================================
+        // 厨房の監視カメラ（ログ）に誰に送ったかを明確に記録する
         const userName = item.user.name || item.user.email || '名無し';
         console.log(`✅ [送信成功] 宛先: ${userName} 様 | 商品: ${item.name} (残り${item.daysLeft}日)`);
         
