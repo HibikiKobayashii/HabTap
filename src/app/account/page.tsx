@@ -16,6 +16,7 @@ import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import SendIcon from '@mui/icons-material/Send';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import PushSetting from '@/components/PushSetting';
 import { submitFeedback, getBiometricStatus, removeBiometricStatus } from '@/app/actions';
@@ -35,7 +36,9 @@ export default function AccountPage() {
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false); // ★ ポータル遷移中のローディング状態
   
   const [clientSecret, setClientSecret] = useState('');
   const [isLocallyPro, setIsLocallyPro] = useState(false);
@@ -101,11 +104,61 @@ export default function AccountPage() {
   const isAdmin = (session.user as any)?.role === 'admin';
   const adminPurple = '#8E24AA';
 
+  // 【支配人専用】テスト決済への入り口
   const handleUpgradeToPro = async () => {
-    // 閉鎖中のため、関数自体もガードしておきます
-    return;
+    if (!isAdmin) {
+      showMessage('現在、一般公開に向けた準備中です。', 'warning');
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/stripe/checkout', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: (session.user as any).id })
+      });
+      const data = await res.json();
+      
+      if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
+      } else {
+        showMessage('決済画面の準備に失敗しました。', 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showMessage('通信エラーが発生しました。', 'error');
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
+  // ★ 追加：カスタマーポータル（解約・カード変更）への案内係
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: (session.user as any).id })
+      });
+      const data = await res.json();
+
+      if (data.url) {
+        // StripeのVIPルームへお客様をお連れする
+        window.location.href = data.url;
+      } else {
+        showMessage(data.error || 'ポータルの準備に失敗しました。一度ログアウトをお試しください。', 'error');
+      }
+    } catch (error) {
+      console.error(error);
+      showMessage('通信エラーが発生しました。', 'error');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  // 生体認証の切り替え処理
   const handleBiometricToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = event.target.checked;
     if (!session?.user) {
@@ -183,6 +236,7 @@ export default function AccountPage() {
     }
   };
 
+  // フィードバック送信処理
   const handleFeedbackSubmit = async () => {
     if (!feedback.trim() || !session.user) return;
     
@@ -219,6 +273,7 @@ export default function AccountPage() {
       <Box sx={{ p: { xs: 2, md: 5 }, maxWidth: 600, mx: 'auto', pb: { xs: 14, md: 16 } }}>
         <Typography variant="h4" sx={{ mb: 4, fontWeight: 'bold', color: '#0f172a' }}>Account</Typography>
 
+        {/* ユーザー情報カード */}
         <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', mb: 3, boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
             <Avatar src={session.user?.image || ''} sx={{ width: 64, height: 64 }} />
@@ -240,27 +295,89 @@ export default function AccountPage() {
           )}
         </Paper>
 
-        {/* ★ アップグレード導線の閉鎖対応 */}
-        {!isPro && !clientSecret && (
-          <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', bgcolor: '#f8fafc', mb: 4, textAlign: 'center' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#94a3b8', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-              <WorkspacePremiumIcon sx={{ color: '#94a3b8' }} /> PROプラン（準備中）
+        {/* ★ PRO会員向け：契約管理（カスタマーポータル）への扉 */}
+        {isPro && (
+          <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #D4AF37', bgcolor: '#fffdf4', mb: 4, textAlign: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+              <WorkspacePremiumIcon sx={{ color: '#D4AF37' }} /> PROプランご利用中
             </Typography>
-            <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2, lineHeight: 1.6 }}>
-              現在、決済システムの最終調整を行っております。<br />公開まで今しばらくお待ちください。
+            <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.6 }}>
+              現在、パントリー管理を無制限でご利用いただけます。<br />お支払い方法の変更やご解約は下記よりお手続きください。
             </Typography>
             <Button 
-              variant="contained" 
+              variant="outlined" 
               fullWidth 
-              disabled={true} // ★ ボタンを完全に封鎖
-              sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, bgcolor: '#e2e8f0', color: '#94a3b8' }}
+              onClick={handleManageSubscription} 
+              disabled={portalLoading}
+              startIcon={portalLoading ? <CircularProgress size={20} color="inherit" /> : <OpenInNewIcon />}
+              sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, borderColor: '#D4AF37', color: '#D4AF37', '&:hover': { bgcolor: '#fff9e6', borderColor: '#b5952f' } }}
             >
-              現在ご利用いただけません
+              {portalLoading ? 'ページを準備中...' : '契約内容の確認・解約'}
             </Button>
           </Paper>
         )}
 
-        {/* 以下、設定項目などの表示は継続 */}
+        {/* 非PRO会員向け：アップグレード導線 */}
+        {!isPro && !clientSecret && (
+          isAdmin ? (
+            // 【支配人専用】テスト決済用のアクティブなボタン
+            <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #D4AF37', bgcolor: '#fffdf4', mb: 4, textAlign: 'center' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <WorkspacePremiumIcon sx={{ color: '#D4AF37' }} /> 【Admin専用】PROプランへアップグレード
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#475569', mb: 2, lineHeight: 1.6 }}>
+                月額100円で、4品目以上のパントリー管理が無制限に可能になります。
+              </Typography>
+              <Button 
+                variant="contained" 
+                fullWidth 
+                onClick={handleUpgradeToPro} 
+                disabled={checkoutLoading}
+                startIcon={checkoutLoading ? <CircularProgress size={20} color="inherit" /> : null}
+                sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, bgcolor: '#D4AF37', '&:hover': { bgcolor: '#b5952f' }, color: '#fff' }}
+              >
+                {checkoutLoading ? '準備中...' : 'PRO版にアップグレードする'}
+              </Button>
+            </Paper>
+          ) : (
+            // 【一般ユーザー用】閉鎖中の看板
+            <Paper elevation={0} sx={{ p: 3, borderRadius: '32px', border: '1px solid #e2e8f0', bgcolor: '#f8fafc', mb: 4, textAlign: 'center' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#94a3b8', mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <WorkspacePremiumIcon sx={{ color: '#94a3b8' }} /> PROプラン（準備中）
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2, lineHeight: 1.6 }}>
+                現在、決済システムの最終調整を行っております。<br />公開まで今しばらくお待ちください。
+              </Typography>
+              <Button 
+                variant="contained" 
+                fullWidth 
+                disabled={true} 
+                sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, bgcolor: '#e2e8f0', color: '#94a3b8' }}
+              >
+                現在ご利用いただけません
+              </Button>
+            </Paper>
+          )
+        )}
+
+        {/* 決済用の埋め込みコンポーネント */}
+        {clientSecret && (
+          <Paper elevation={0} sx={{ mb: 4, p: { xs: 2, md: 3 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="subtitle1" fontWeight="bold">決済手続き</Typography>
+              <Button size="small" onClick={() => setClientSecret('')} sx={{ color: 'text.secondary', borderRadius: '16px' }}>
+                キャンセル
+              </Button>
+            </Box>
+            <Box sx={{ width: '100%', minHeight: '400px' }}>
+              <EmbeddedCheckoutProvider stripe={stripePromise} options={{clientSecret}}>
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider>
+            </Box>
+          </Paper>
+        )}
+
+        {/* 各種設定メニュー */}
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, px: 1, fontWeight: 'bold' }}>APP SETTINGS</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
           <PushSetting />

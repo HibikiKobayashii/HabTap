@@ -56,17 +56,20 @@ model User {
   createdAt      DateTime  @default(now())      
   lastLoginAt    DateTime  @default(now())      
   
-  proSubscribedAt DateTime?                     
-  proCancelledAt  DateTime?                     
+  proSubscribedAt DateTime?                      
+  proCancelledAt  DateTime?                      
 
   // プッシュ通知の「宛先情報（郵便受け）」
-  pushSubscription String? @db.Text             
+  pushSubscription String? @db.Text              
 
   // ★ 追加1：VIP（PRO）昇格のための「パントリー補充回数（熟練度）」
   restockCount  Int       @default(0)
 
   // 生体認証の際に発行する「一時的な合言葉（チャレンジ）」を記憶する枠
   currentChallenge String? @db.Text
+
+  // ★ 追加2：Stripeカスタマーポータルへ案内するための「顧客ID」の控え
+  stripeCustomerId String? @unique
 
   accounts      Account[]
   sessions      Session[]
