@@ -11,7 +11,6 @@ import SmartphoneIcon from '@mui/icons-material/Smartphone';
 import { useSession } from 'next-auth/react';
 import { savePushSubscription } from '@/app/actions';
 
-// VAPIDキーを翻訳する特殊な器具
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -27,7 +26,7 @@ export default function PushSetting() {
   const { data: session } = useSession();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false); // ★ 追加：メイン端末切り替えボタン用のローディング
+  const [syncing, setSyncing] = useState(false);
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -53,7 +52,6 @@ export default function PushSetting() {
     }
   }, []);
 
-  // ★ 変更：スイッチは純粋に「このブラウザで通知を許可するか/解除するか」のみを担当します
   const handleToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!session?.user) {
       showMessage('ログインが必要です', 'warning');
@@ -75,10 +73,9 @@ export default function PushSetting() {
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
 
-        // 初回ON時は自動的にメイン端末として登録します
         await savePushSubscription((session.user as any).id, JSON.stringify(subscription));
         setIsSubscribed(true);
-        showMessage('通知をオンにし、この端末をメインに設定しました', 'success');
+        showMessage('通知をオンにし、この端末＆アカウントをメインに設定しました', 'success');
 
       } else {
         const subscription = await registration.pushManager.getSubscription();
@@ -100,7 +97,6 @@ export default function PushSetting() {
     }
   };
 
-  // ★ 新設：この端末を強制的に「メインの宛先」としてサーバーに上書きするボタン
   const handleSetMainDevice = async () => {
     if (!session?.user) return;
     setSyncing(true);
@@ -109,7 +105,6 @@ export default function PushSetting() {
       const registration = await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
 
-      // もし裏側で許可が外れていた場合は再取得
       if (!subscription) {
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         if (!vapidPublicKey) throw new Error('VAPIDキーが見つかりません。');
@@ -120,13 +115,12 @@ export default function PushSetting() {
         setIsSubscribed(true);
       }
 
-      // 現在の端末の宛先（トークン）をデータベースに上書き
       await savePushSubscription((session.user as any).id, JSON.stringify(subscription));
-      showMessage('この端末をメインの通知先に設定しました', 'success');
+      showMessage('この端末＆アカウントをメインに設定しました', 'success');
 
     } catch (error) {
       console.error(error);
-      showMessage('端末の設定に失敗しました。', 'error');
+      showMessage('設定に失敗しました。', 'error');
     } finally {
       setSyncing(false);
     }
@@ -144,6 +138,7 @@ export default function PushSetting() {
           boxShadow: '0 4px 20px rgba(0,0,0,0.02)' 
         }}
       >
+        {/* 上段：通知スイッチエリア */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <NotificationsActiveIcon color="primary" sx={{ fontSize: 28 }} />
@@ -167,41 +162,49 @@ export default function PushSetting() {
           )}
         </Box>
 
-        {/* ★ スイッチがON（許可状態）の時だけ、メイン端末変更ボタンを表示します */}
         {isSubscribed && (
           <>
             <Divider sx={{ my: 2.5, borderColor: '#f1f5f9' }} />
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+            {/* ★ 修正：flexDirection を 'column' に固定し、縦並びに統一 */}
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'flex-start', // 左寄せで安定感を出す
+              gap: 2.5 
+            }}>
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a' }}>
-                  通知を受け取る端末
+                  通知を受け取る端末＆アカウント
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5, lineHeight: 1.5 }}>
-                  ※複数の端末をお使いの場合、<br />最後にボタンを押した端末にのみ通知が届きます。
+                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.8, lineHeight: 1.6 }}>
+                  ※複数の端末＆アカウントをお使いの場合、最後にボタンを押した端末＆アカウントにのみ通知が届きます。
                 </Typography>
               </Box>
+              
               <Button
                 variant="outlined"
                 color="primary"
+                fullWidth // ★ 横幅いっぱいに広げることで、スマホでもPCでも押しやすいボタンに
                 onClick={handleSetMainDevice}
                 disabled={syncing}
                 startIcon={syncing ? <CircularProgress size={16} /> : <SmartphoneIcon />}
                 sx={{ 
-                  borderRadius: '20px', 
+                  borderRadius: '16px', 
                   fontWeight: 'bold', 
-                  px: 2.5,
-                  py: 1,
-                  whiteSpace: 'nowrap'
+                  py: 1.5,
+                  textTransform: 'none', // 勝手に大文字にならないように
+                  bgcolor: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  '&:hover': { bgcolor: '#f1f5f9', border: '1px solid #94a3b8' }
                 }}
               >
-                この端末をメインにする
+                この端末＆アカウントをメインにする
               </Button>
             </Box>
           </>
         )}
       </Paper>
 
-      {/* お客様への極上のメッセージ・プレート */}
       <Snackbar 
         open={snackbar.open} 
         autoHideDuration={4000} 
