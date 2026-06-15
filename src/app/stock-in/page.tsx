@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { 
-  Box, Typography, TextField, Button, Paper, CircularProgress, Avatar, Divider, IconButton
+  Box, Typography, TextField, Button, Paper, CircularProgress, Avatar, Divider, IconButton, Switch // ★ Switchをインポート
 } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -26,9 +26,9 @@ export default function StockInPage() {
   const [isLimitReached, setIsLimitReached] = useState(false);
   const [checkingLimit, setCheckingLimit] = useState(true);
 
-  // ★ 修正：imageUrlを消し、代わりに画像ファイル本体とプレビューURLを管理
+  // ★ 修正：isAutoConsume（自動消費スイッチ）を初期値ON（true）で追加
   const [formData, setFormData] = useState({
-    name: '', stock: '', maxStock: '', consumeDays: '1', consumeAmount: '1', amazonUrl: '',
+    name: '', stock: '', maxStock: '', consumeDays: '1', consumeAmount: '1', amazonUrl: '', isAutoConsume: true,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -56,7 +56,12 @@ export default function StockInPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ★ 追加：画像が選択されたときの処理（プレビューの作成）
+  // ★ 追加：スイッチ切り替え用のハンドラー
+  const handleSwitchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -93,14 +98,12 @@ export default function StockInPage() {
     e.preventDefault();
     if (!session?.user) return alert("ログインが必要です");
 
-    // ToDoリストにあった「名前・画像のアップロードを必須化」をここで担保します
     if (!imageFile) {
       return alert("商品の画像をアップロードしてください。");
     }
 
     setLoading(true);
     try {
-      // 1. まずVercel Blobに画像をアップロードする
       let uploadedImageUrl = '';
       const uploadFormData = new FormData();
       uploadFormData.append('file', imageFile);
@@ -112,9 +115,8 @@ export default function StockInPage() {
 
       if (!uploadRes.ok) throw new Error("画像のアップロードに失敗しました");
       const uploadData = await uploadRes.json();
-      uploadedImageUrl = uploadData.url; // Blobから発行された本番URLを取得
+      uploadedImageUrl = uploadData.url; 
 
-      // 2. 計算処理とデータベースへの登録（取得したURLを使う）
       const currentStock = parseInt(formData.stock, 10);
       const consumeDaysNum = parseInt(formData.consumeDays, 10);
       const consumeAmountNum = parseInt(formData.consumeAmount, 10);
@@ -127,8 +129,9 @@ export default function StockInPage() {
         daysLeft: calculatedDaysLeft, 
         consumeDays: consumeDaysNum, 
         consumeAmount: consumeAmountNum,
-        imageUrl: uploadedImageUrl, // ★ 取得した Blob URL を保存！
+        imageUrl: uploadedImageUrl, 
         amazonUrl: formData.amazonUrl,
+        isAutoConsume: formData.isAutoConsume, // ★ スイッチの状態を裏口へ配達！
       });
 
       if (result?.error) {
@@ -188,7 +191,6 @@ export default function StockInPage() {
           <form onSubmit={handleSubmit}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
               
-              {/* ★ 新設：画像アップロードエリア */}
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 2, width: '100%', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <ImageIcon fontSize="small" /> 商品の画像 <span style={{ color: '#ef4444' }}>*</span>
@@ -243,21 +245,50 @@ export default function StockInPage() {
 
               <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>現在の在庫数 *</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>現在の在庫数 <span style={{ color: '#ef4444' }}>*</span></Typography>
                   <TextField placeholder="例: 3" name="stock" type="number" value={formData.stock} onChange={handleChange} required fullWidth sx={textFieldSx} />
                 </Box>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>満タン時の数 *</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#475569', mb: 1, ml: 0.5 }}>満タン時の数 <span style={{ color: '#ef4444' }}>*</span></Typography>
                   <TextField placeholder="例: 6" name="maxStock" type="number" value={formData.maxStock} onChange={handleChange} required fullWidth sx={textFieldSx} />
                 </Box>
               </Box>
 
               <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f1f5f9', border: '1px solid #e2e8f0' }}>
-                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 2, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>消費のペース *</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 2, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>消費のペース <span style={{ color: '#ef4444' }}>*</span></Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                   <TextField name="consumeDays" type="number" value={formData.consumeDays} onChange={handleChange} required InputProps={{ endAdornment: <Typography variant="body2" sx={adornmentSx}>日間で</Typography> }} sx={{ flex: 1, ...textFieldSx }} />
                   <TextField name="consumeAmount" type="number" value={formData.consumeAmount} onChange={handleChange} required InputProps={{ endAdornment: <Typography variant="body2" sx={adornmentSx}>個使う</Typography> }} sx={{ flex: 1, ...textFieldSx }} />
                 </Box>
+              </Box>
+
+              {/* ★ 新設: 自動在庫消費のON/OFF切り替えスイッチ */}
+              <Box 
+                sx={{ 
+                  p: 2.5, 
+                  borderRadius: '24px', 
+                  bgcolor: '#ffffff', 
+                  border: '1px solid #e2e8f0', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.01)'
+                }}
+              >
+                <Box sx={{ pr: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a' }}>
+                    日付が変わる時に在庫を自動で減らす（初期設定：ON）
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5, lineHeight: 1.4 }}>
+                    ※OFFにすると、毎晩の自動計算をスルーします。NFCタグのタッチや手動でのみ消費させたい商品に最適です。
+                  </Typography>
+                </Box>
+                <Switch 
+                  name="isAutoConsume"
+                  checked={formData.isAutoConsume} 
+                  onChange={handleSwitchChange} 
+                  color="primary"
+                />
               </Box>
 
               <Button type="submit" variant="contained" size="large" disabled={loading} sx={{ mt: 2, py: 1.5, fontSize: '1.1rem', fontWeight: 'bold', borderRadius: '24px' }}>

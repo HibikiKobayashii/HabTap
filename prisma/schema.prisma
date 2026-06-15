@@ -109,10 +109,16 @@ model Item {
   consumeAmount Int      @default(1) 
   lastAutoConsumedAt DateTime @default(now()) 
 
+  // ★ 追加：自動消費をON/OFFするスイッチ（デフォルトはON）
+  isAutoConsume Boolean  @default(true)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+
+
 
 // ==========================================
 // Voix（お客様の声）を保存する専用の器

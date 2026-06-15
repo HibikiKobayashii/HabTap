@@ -21,13 +21,19 @@ webpush.setVapidDetails(
  * ★ 極秘の調理法：時間経過による「自動熟成」
  * ==========================================
  */
-// ★ 修正：export を追加し、Cron API からも全員の時間を進められるようにしました
 export async function autoConsumeItems(userId: string) {
   const items = await prisma.item.findMany({ where: { userId } });
   const now = new Date();
   let hasUpdated = false;
 
   for (const item of items) {
+    // ==========================================
+    // ★ 修正：NFCタグ等の手動管理アイテムは自動消費を完全にスルーする！
+    // ==========================================
+    if (item.isAutoConsume === false) {
+      continue; // このアイテムには一切触れずに次の商品へ
+    }
+
     const lastConsumed = item.lastAutoConsumedAt || item.createdAt;
     if (!lastConsumed) continue;
 
@@ -113,6 +119,7 @@ export async function getUserPlanAndItemCount(userId: string) {
 export async function createItem(data: {
   name: string; stock: number; maxStock: number; daysLeft: number; 
   imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
+  isAutoConsume?: boolean; // ★ 追加：自動消費スイッチの受け入れ口
 }) {
   try {
     const session = await getServerSession(authOptions);
@@ -133,6 +140,7 @@ export async function createItem(data: {
         consumeDays: data.consumeDays ?? 1,
         consumeAmount: data.consumeAmount ?? 1,
         lastAutoConsumedAt: new Date(), 
+        isAutoConsume: data.isAutoConsume ?? true, // ★ 追加：デフォルトはON
       }
     });
     revalidatePath('/');
@@ -147,6 +155,7 @@ export async function createItem(data: {
 export async function updateItem(itemId: string, data: {
   name: string; stock: number; maxStock: number; daysLeft: number; 
   imageUrl: string; amazonUrl: string; consumeDays?: number; consumeAmount?: number;
+  isAutoConsume?: boolean; // ★ 追加：自動消費スイッチの受け入れ口
 }) {
   try {
     const updated = await prisma.item.update({
@@ -160,6 +169,7 @@ export async function updateItem(itemId: string, data: {
         amazonUrl: data.amazonUrl,
         ...(data.consumeDays !== undefined && { consumeDays: data.consumeDays }),
         ...(data.consumeAmount !== undefined && { consumeAmount: data.consumeAmount }),
+        ...(data.isAutoConsume !== undefined && { isAutoConsume: data.isAutoConsume }), // ★ 追加：設定変更
       }
     });
     revalidatePath('/');

@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Box, Typography, TextField, Button, Paper, CircularProgress, IconButton, Divider } from '@mui/material';
+import { Box, Typography, TextField, Button, Paper, CircularProgress, IconButton, Divider, Switch } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import ImageIcon from '@mui/icons-material/Image';
@@ -22,14 +22,11 @@ export default function EditItemPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // DBから取得した元の画像URLを保持
   const [originalImageUrl, setOriginalImageUrl] = useState('');
 
-  // 新しく選択された画像ファイルとプレビュー
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // ★ 修正: daysLeft（残り日数）の手入力を廃止し、consumeDaysとconsumeAmountを追加
   const [formData, setFormData] = useState({
     name: '', 
     stock: '', 
@@ -37,6 +34,7 @@ export default function EditItemPage() {
     amazonUrl: '', 
     consumeDays: '1', 
     consumeAmount: '1',
+    isAutoConsume: true,
   });
 
   useEffect(() => {
@@ -52,6 +50,7 @@ export default function EditItemPage() {
             amazonUrl: item.amazonUrl || '',
             consumeDays: item.consumeDays.toString(),
             consumeAmount: item.consumeAmount.toString(),
+            isAutoConsume: item.isAutoConsume ?? true,
           });
           
           if (item.imageUrl) {
@@ -71,6 +70,11 @@ export default function EditItemPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSwitchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    setFormData(prev => ({ ...prev, [name]: checked }));
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,7 +116,6 @@ export default function EditItemPage() {
         finalImageUrl = '';
       }
 
-      // ★ 修正: 在庫と消費ペースから「残り日数（daysLeft）」を自動再計算する！
       const currentStock = parseInt(formData.stock, 10);
       const consumeDaysNum = parseInt(formData.consumeDays, 10);
       const consumeAmountNum = parseInt(formData.consumeAmount, 10);
@@ -122,11 +125,12 @@ export default function EditItemPage() {
         name: formData.name,
         stock: currentStock,
         maxStock: parseInt(formData.maxStock, 10),
-        daysLeft: calculatedDaysLeft, // 自動計算した日数を保存
+        daysLeft: calculatedDaysLeft, 
         imageUrl: finalImageUrl,
         amazonUrl: formData.amazonUrl,
         consumeDays: consumeDaysNum,
         consumeAmount: consumeAmountNum,
+        isAutoConsume: formData.isAutoConsume,
       });
       
       router.push('/pantry');
@@ -162,7 +166,7 @@ export default function EditItemPage() {
           <ArrowBackIcon sx={{ color: '#475569' }} />
         </IconButton>
         <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <EditIcon sx={{ color: 'primary.main', fontSize: 28 }} /> 品の編集
+          <EditIcon sx={{ color: 'primary.main', fontSize: 28 }} /> 商品の編集
         </Typography>
       </Box>
 
@@ -244,7 +248,6 @@ export default function EditItemPage() {
               </Box>
             </Box>
 
-            {/* ★ 追加: 消費ペースの編集エリア */}
             <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f1f5f9', border: '1px solid #e2e8f0' }}>
               <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 2, ml: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 消費のペース <span style={{ color: '#ef4444' }}>*</span>
@@ -261,6 +264,72 @@ export default function EditItemPage() {
                   sx={{ flex: 1, ...textFieldSx }} 
                 />
               </Box>
+            </Box>
+
+            {/* 自動在庫消費ON/OFF切り替えスイッチ */}
+            <Box 
+              sx={{ 
+                p: 2.5, 
+                borderRadius: '24px', 
+                bgcolor: '#ffffff', 
+                border: '1px solid #e2e8f0', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.01)'
+              }}
+            >
+              <Box sx={{ pr: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#0f172a' }}>
+                  日付が変わる時に在庫を自動で減らす（初期設定：ON）
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#64748b', display: 'block', mt: 0.5, lineHeight: 1.4 }}>
+                  ※OFFにすると、毎晩の自動計算をスルーします。NFCタグのタッチや手動でのみ消費させたい商品に最適です。
+                </Typography>
+              </Box>
+              <Switch 
+                name="isAutoConsume"
+                checked={formData.isAutoConsume} 
+                onChange={handleSwitchChange} 
+                color="primary"
+              />
+            </Box>
+
+            {/* NFCスマート消費（Android限定） */}
+            <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f8fafc', border: '1px dashed #cbd5e1', mt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1 }}>
+                📱 NFCスマート消費（Android限定）
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b', mb: 2, lineHeight: 1.5 }}>
+                市販のNFCシールにスマホをかざして、この商品を一瞬で消費する設定を書き込みます。
+              </Typography>
+              <Button 
+                variant="outlined" 
+                fullWidth
+                sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, borderColor: '#94a3b8', color: '#0f172a' }}
+                onClick={async () => {
+                  if (!('NDEFReader' in window)) {
+                    alert('お使いのブラウザや端末（iPhone等）は、WebからのNFC書き込みに対応しておりません。');
+                    return;
+                  }
+                  try {
+                    // @ts-ignore (TypeScriptの型エラー回避)
+                    const ndef = new window.NDEFReader();
+                    await ndef.write({
+                      records: [{
+                        recordType: "url",
+                        data: `${window.location.origin}/pantry/nfc/${itemId}`
+                      }]
+                    });
+                    alert('✅ NFCタグへの書き込みに成功しました！\n次回からタグにタッチするだけで消費できます。');
+                  } catch (error) {
+                    console.error("NFC Write Error:", error);
+                    alert('書き込みに失敗しました。NFCシールにスマホをしっかりと近づけてください。');
+                  }
+                }}
+              >
+                NFCシールに情報を書き込む
+              </Button>
             </Box>
 
             <Box sx={{ p: 2.5, borderRadius: '24px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0', mt: 1 }}>
