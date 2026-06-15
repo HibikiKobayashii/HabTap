@@ -1,11 +1,11 @@
 // src/app/stock-in/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { 
-  Box, Typography, TextField, Button, Paper, CircularProgress, Avatar, Divider, IconButton, Switch // ★ Switchをインポート
+  Box, Typography, TextField, Button, Paper, CircularProgress, Avatar, Divider, IconButton, Switch, Dialog, DialogContent
 } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -15,6 +15,8 @@ import LinkIcon from '@mui/icons-material/Link';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloseIcon from '@mui/icons-material/Close';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 
 import { createItem, getUserPlanAndItemCount } from '../actions';
 
@@ -26,12 +28,20 @@ export default function StockInPage() {
   const [isLimitReached, setIsLimitReached] = useState(false);
   const [checkingLimit, setCheckingLimit] = useState(true);
 
-  // ★ 修正：isAutoConsume（自動消費スイッチ）を初期値ON（true）で追加
+  // ★ 追加：新しく仕入れた商品のIDを保持する（成功画面へ切り替えるためのフラグ）
+  const [createdItemId, setCreatedItemId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: '', stock: '', maxStock: '', consumeDays: '1', consumeAmount: '1', amazonUrl: '', isAutoConsume: true,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // ★ 追加：NFC書き込みポップアップ専用の状態管理
+  const [nfcDialogOpen, setNfcDialogOpen] = useState(false);
+  const [nfcStatus, setNfcStatus] = useState<'scanning' | 'success' | 'error'>('scanning');
+  const [nfcMessage, setNfcMessage] = useState('');
+  const nfcAbortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     async function checkLimit() {
@@ -56,7 +66,6 @@ export default function StockInPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ★ 追加：スイッチ切り替え用のハンドラー
   const handleSwitchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
     setFormData(prev => ({ ...prev, [name]: checked }));
@@ -131,7 +140,7 @@ export default function StockInPage() {
         consumeAmount: consumeAmountNum,
         imageUrl: uploadedImageUrl, 
         amazonUrl: formData.amazonUrl,
-        isAutoConsume: formData.isAutoConsume, // ★ スイッチの状態を裏口へ配達！
+        isAutoConsume: formData.isAutoConsume, 
       });
 
       if (result?.error) {
@@ -140,12 +149,69 @@ export default function StockInPage() {
         return;
       }
 
-      router.push('/pantry');
+      // ★ 修正：パントリーに飛ばさず、成功画面へ移行するためにIDをセット
+      if (result?.item?.id) {
+        setCreatedItemId(result.item.id);
+      } else {
+        router.push('/pantry'); // 万が一IDが取れなかったらパントリーへ
+      }
     } catch (error) {
       console.error(error);
       alert("仕入れに失敗しました");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ★ 追加：NFCの待機を安全にキャンセルする関数
+  const handleCancelNfc = () => {
+    if (nfcAbortController.current) {
+      nfcAbortController.current.abort();
+    }
+    setNfcDialogOpen(false);
+  };
+
+  // ★ 追加：NFC書き込みロジック（オーナーの気付きにより、自動消費は勝手にOFFにしません！）
+  const handleNfcWrite = async () => {
+    if (!('NDEFReader' in window)) {
+      alert('お使いのブラウザや端末（iPhone等）は、WebからのNFC書き込みに対応しておりません。');
+      return;
+    }
+
+    setNfcDialogOpen(true);
+    setNfcStatus('scanning');
+    setNfcMessage('NFCタグに情報を書き込みます。スマホをシールにしっかりと近づけてください...');
+
+    const abortController = new AbortController();
+    nfcAbortController.current = abortController;
+
+    try {
+      // @ts-ignore
+      const ndef = new window.NDEFReader();
+      await ndef.write(
+        {
+          records: [{
+            recordType: "url",
+            data: `${window.location.origin}/pantry/nfc/${createdItemId}`
+          }]
+        },
+        { signal: abortController.signal }
+      );
+
+      setNfcStatus('success');
+      setNfcMessage('NFCタグへの書き込みが正常に完了しました！次回からかざすだけで消費できます。');
+      
+      // ※オーナーの素晴らしい気付きにより、ここでは isAutoConsume をいじりません！
+      // 自動でも手動(NFC)でも減らしたいお客様のために、設定を尊重します。
+
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log("NFCスキャンがキャンセルされました。");
+        return;
+      }
+      console.error("NFC Write Error:", error);
+      setNfcStatus('error');
+      setNfcMessage('書き込みに失敗しました。スマホのNFC位置を確認し、もう一度シールに近づけてください。');
     }
   };
 
@@ -186,7 +252,51 @@ export default function StockInPage() {
             </Button>
           </Box>
         </Paper>
+
+      ) : createdItemId ? (
+        // ==========================================
+        // ★ 新設：仕入れ成功 ＆ NFC書き込みサジェスト画面
+        // ==========================================
+        <Paper elevation={0} sx={{ p: { xs: 4, md: 6 }, borderRadius: '32px', border: '1px solid #e2e8f0', textAlign: 'center', bgcolor: '#ffffff', boxShadow: '0 8px 32px rgba(0,0,0,0.03)', animation: 'fadeIn 0.5s ease-out' }}>
+          <CheckCircleIcon sx={{ fontSize: 80, color: '#10b981', mb: 2 }} />
+          <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1 }}>
+            仕入れが完了しました！
+          </Typography>
+          <Typography variant="body1" sx={{ color: '#475569', mb: 4 }}>
+            「{formData.name}」がパントリーに追加されました。
+          </Typography>
+
+          <Box sx={{ p: 3, borderRadius: '24px', bgcolor: '#f8fafc', border: '1px dashed #cbd5e1', mb: 4, maxWidth: 400, mx: 'auto' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#0f172a', mb: 1 }}>
+              📱 NFCタグに登録しますか？
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#64748b', mb: 3, lineHeight: 1.6 }}>
+              市販のNFCシールに情報を書き込むと、次回からスマホをかざすだけで消費を記録できるようになります。（※Android限定）
+            </Typography>
+            <Button 
+              variant="outlined" 
+              fullWidth
+              onClick={handleNfcWrite}
+              sx={{ borderRadius: '24px', fontWeight: 'bold', py: 1.5, borderColor: '#94a3b8', color: '#0f172a', bgcolor: '#ffffff' }}
+            >
+              NFCシールに情報を書き込む
+            </Button>
+          </Box>
+
+          <Button 
+            variant="contained" 
+            size="large"
+            onClick={() => router.push('/pantry')}
+            sx={{ borderRadius: '24px', px: 6, py: 1.5, fontWeight: 'bold', boxShadow: 'none' }}
+          >
+            パントリーへ戻る
+          </Button>
+        </Paper>
+
       ) : (
+        // ==========================================
+        // 通常の新規登録フォーム
+        // ==========================================
         <Paper elevation={0} sx={{ p: { xs: 3, md: 5 }, borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 8px 32px rgba(0,0,0,0.03)' }}>
           <form onSubmit={handleSubmit}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
@@ -262,7 +372,6 @@ export default function StockInPage() {
                 </Box>
               </Box>
 
-              {/* ★ 新設: 自動在庫消費のON/OFF切り替えスイッチ */}
               <Box 
                 sx={{ 
                   p: 2.5, 
@@ -298,6 +407,85 @@ export default function StockInPage() {
           </form>
         </Paper>
       )}
+
+      {/* ==========================================
+          ★ 新設：NFC書き込み中のダイアログ
+          ========================================== */}
+      <Dialog 
+        open={nfcDialogOpen} 
+        onClose={handleCancelNfc} 
+        PaperProps={{ sx: { borderRadius: '28px', p: 2, maxWidth: 360, width: '100%', textAlign: 'center' } }}
+      >
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2.5, py: 3 }}>
+          {nfcStatus === 'scanning' && (
+            <>
+              <CircularProgress size={56} thickness={4} sx={{ color: 'primary.main' }} />
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a', mt: 1 }}>
+                タグを近づけてください
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b', px: 1, lineHeight: 1.5, mb: 1 }}>
+                {nfcMessage}
+              </Typography>
+              <Button 
+                variant="outlined" 
+                onClick={handleCancelNfc}
+                sx={{ borderRadius: '20px', fontWeight: 'bold', borderColor: '#cbd5e1', color: '#475569', mt: 1, px: 4 }}
+              >
+                キャンセル
+              </Button>
+            </>
+          )}
+
+          {nfcStatus === 'success' && (
+            <>
+              <CheckCircleIcon sx={{ fontSize: 64, color: '#10b981', animation: 'scaleUp 0.3s ease-out' }} />
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>
+                書き込み完了！
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#475569', px: 1, lineHeight: 1.5 }}>
+                {nfcMessage}
+              </Typography>
+              <Button 
+                variant="contained" 
+                onClick={() => setNfcDialogOpen(false)}
+                sx={{ borderRadius: '20px', px: 4, mt: 1, fontWeight: 'bold', boxShadow: 'none' }}
+              >
+                閉じる
+              </Button>
+            </>
+          )}
+
+          {nfcStatus === 'error' && (
+            <>
+              <CancelIcon sx={{ fontSize: 64, color: '#ef4444' }} />
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#0f172a' }}>
+                書き込み失敗
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#64748b', px: 1, lineHeight: 1.5 }}>
+                {nfcMessage}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 1, width: '100%' }}>
+                <Button 
+                  variant="outlined" 
+                  fullWidth
+                  onClick={handleCancelNfc}
+                  sx={{ borderRadius: '20px', fontWeight: 'bold', borderColor: '#cbd5e1', color: '#475569' }}
+                >
+                  キャンセル
+                </Button>
+                <Button 
+                  variant="contained" 
+                  fullWidth
+                  onClick={handleNfcWrite} 
+                  sx={{ borderRadius: '20px', fontWeight: 'bold' }}
+                >
+                  再試行
+                </Button>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }
