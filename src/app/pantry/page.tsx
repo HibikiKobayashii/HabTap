@@ -21,10 +21,11 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'; 
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ContactlessIcon from '@mui/icons-material/Contactless'; // ★ NFCアイコンを追加
 
 import { getUserItems, deleteItem, consumeItem } from '../actions';
 
-// ★ 修正：Itemの型定義に「消費ペース」を追加
+// ★ 修正：Itemの型定義に「自動消費フラグ（isAutoConsume）」を追加
 type Item = {
   id: string;
   name: string;
@@ -32,8 +33,9 @@ type Item = {
   maxStock: number;
   daysLeft: number;
   imageUrl: string | null;
-  consumeDays: number;   // 追加
-  consumeAmount: number; // 追加
+  consumeDays: number;   
+  consumeAmount: number; 
+  isAutoConsume: boolean; // ★ 追加：これでNFC管理かどうかを判定します
 };
 
 export default function PantryManagementPage() {
@@ -278,12 +280,21 @@ export default function PantryManagementPage() {
                     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: '500' }}>在庫: <strong style={{ color: item.stock <= 0 ? '#ef4444' : '#0f172a' }}>{item.stock}</strong> / {item.maxStock}</Typography>
                     <Chip label={`${item.daysLeft} 日分`} size="small" sx={{ bgcolor: item.daysLeft <= 2 ? '#fee2e2' : '#f1f5f9', color: item.daysLeft <= 2 ? '#b91c1c' : '#475569', fontWeight: 'bold', borderRadius: '12px' }} />
                     
-                    {/* ★ ここに隠し味！ 消費ペースを上品に添えました */}
+                    {/* 消費ペースのバッジ */}
                     <Tooltip title="設定されている消費のペース" placement="top">
                       <Typography variant="caption" sx={{ color: '#64748b', bgcolor: '#f8fafc', px: 1, py: 0.5, borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <AutorenewIcon sx={{ fontSize: 14 }} /> {item.consumeDays}日で{item.consumeAmount}個
                       </Typography>
                     </Tooltip>
+
+                    {/* ★ 追加：NFC管理中（自動消費OFF）のアイテムに緑のバッジを点灯！ */}
+                    {!item.isAutoConsume && (
+                      <Tooltip title="この商品はNFCタグ等の手動で管理されています" placement="top">
+                        <Typography variant="caption" sx={{ color: '#10b981', bgcolor: '#ecfdf5', px: 1, py: 0.5, borderRadius: '8px', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 'bold' }}>
+                          <ContactlessIcon sx={{ fontSize: 14 }} /> NFC
+                        </Typography>
+                      </Tooltip>
+                    )}
                   </Box>
                 </Box>
 
@@ -398,30 +409,42 @@ export default function PantryManagementPage() {
               <StarRoundedIcon sx={{ fontSize: 40, color: '#fff' }} />
             </Avatar>
           </Box>
-          <DialogTitle sx={{ color: '#0f172a', fontWeight: 'bold', textAlign: 'center', fontSize: '1.4rem' }}>
-            VIP席へようこそ
+          <DialogTitle sx={{ color: '#0f172a', fontWeight: '900', textAlign: 'center', fontSize: '1.5rem', pb: 1 }}>
+            PROプランへ昇格！
           </DialogTitle>
-          <DialogContent>
-            <DialogContentText sx={{ color: '#475569', lineHeight: 1.8, textAlign: 'center' }}>
-              見事、パントリーの補充を<strong>2回</strong>達成いたしました。<br /><br />
-              これより、あなたはHabiTapの熟練者（PRO）です。<br />
-              <strong>4品目以降の仕入れ</strong>が可能となりました。さらなる快適な生活をお楽しみください。
-            </DialogContentText>
+          <DialogContent sx={{ textAlign: 'center', px: 3, pb: 1 }}>
+            <Typography variant="body1" sx={{ color: '#475569', mb: 2, lineHeight: 1.6 }}>
+              パントリーへの定期的な補充、ありがとうございます。<br />
+              あなたの卓越した管理能力を称え、アカウントを<strong>PROプラン</strong>へ無償アップグレードいたしました！
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#64748b', bgcolor: '#f1f5f9', p: 1.5, borderRadius: '16px' }}>
+              今後は<strong>無制限</strong>で商品をパントリーに追加できます。
+            </Typography>
           </DialogContent>
-          <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
-            <Button onClick={() => setUpgradeDialogOpen(false)} variant="contained" sx={{ fontWeight: 'bold', borderRadius: '24px', px: 5, py: 1.5, bgcolor: '#0f172a', '&:hover': { bgcolor: '#1e293b' } }}>
-              仕入れを続ける
+          <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+            <Button 
+              variant="contained" 
+              onClick={() => setUpgradeDialogOpen(false)} 
+              sx={{ bgcolor: '#0f172a', color: '#fff', borderRadius: '24px', px: 5, py: 1.5, fontWeight: 'bold', fontSize: '1.1rem', '&:hover': { bgcolor: '#1e293b' } }}
+            >
+              確認して戻る
             </Button>
           </DialogActions>
         </Dialog>
-        
-      </Box>
 
-      <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} variant="filled" sx={{ width: '100%', borderRadius: '12px', fontWeight: 'bold' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+        <Snackbar 
+          open={snackbar.open} 
+          autoHideDuration={4000} 
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          sx={{ mb: { xs: 8, sm: 2 } }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontWeight: 'bold', alignItems: 'center' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
+
+      </Box>
     </>
   );
 }

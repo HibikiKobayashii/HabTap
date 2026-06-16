@@ -7,7 +7,6 @@ import { Box, Typography, Paper, CircularProgress, Button } from '@mui/material'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
-// 既存の消費アクションをそのまま利用します
 import { consumeItem, getItem } from '../../../actions';
 
 export default function NfcConsumePage() {
@@ -19,7 +18,6 @@ export default function NfcConsumePage() {
   const [message, setMessage] = useState('在庫を消費しています...');
   const [itemName, setItemName] = useState('');
   
-  // Reactの「2回実行される仕様(StrictMode)」を防ぐための工夫
   const hasFetched = useRef(false);
 
   useEffect(() => {
@@ -28,11 +26,9 @@ export default function NfcConsumePage() {
       hasFetched.current = true;
 
       try {
-        // 商品名の取得（画面表示のため）
         const item = await getItem(itemId);
         if (item) setItemName(item.name);
 
-        // 厨房への消費リクエスト
         const result = await consumeItem(itemId);
 
         if (result?.error) {
@@ -41,6 +37,19 @@ export default function NfcConsumePage() {
         } else if (result?.success) {
           setStatus('success');
           setMessage(`「${item?.name || '商品'}」の在庫を1つ消費しました！`);
+
+          // ==========================================
+          // ★ 隠し味：0.8秒だけ成功の余韻を見せたあと、自動で画面を片付ける
+          // ==========================================
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              // 1. まずはタブを自ら閉じる努力をする
+              window.close();
+            }
+            // 2. もしブラウザのセキュリティ制限で閉じなかった場合の保険として、
+            //    履歴を残さない形でパントリー管理（一覧）画面へスッとリダイレクトさせる
+            router.replace('/pantry');
+          }, 800);
         }
       } catch (error) {
         console.error(error);
@@ -50,7 +59,7 @@ export default function NfcConsumePage() {
     }
 
     processConsume();
-  }, [itemId]);
+  }, [itemId, router]);
 
   return (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', bgcolor: '#f8fafc', p: 2 }}>
@@ -77,14 +86,10 @@ export default function NfcConsumePage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, animation: 'fadeIn 0.5s ease-out' }}>
             <CheckCircleOutlineIcon sx={{ fontSize: 64, color: '#10b981' }} />
             <Typography variant="h6" sx={{ color: '#0f172a', fontWeight: 'bold' }}>消費完了！</Typography>
-            <Typography variant="body1" sx={{ color: '#475569', mb: 2 }}>{message}</Typography>
-            <Button 
-              variant="contained" 
-              onClick={() => router.push('/pantry')}
-              sx={{ borderRadius: '24px', px: 4, py: 1, fontWeight: 'bold' }}
-            >
-              パントリーへ戻る
-            </Button>
+            <Typography variant="body1" sx={{ color: '#475569', mb: 1 }}>{message}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              まもなく画面が自動で閉じます...
+            </Typography>
           </Box>
         )}
 
